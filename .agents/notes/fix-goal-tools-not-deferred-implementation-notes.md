@@ -22,6 +22,16 @@
 - 回归：让模型调 tool_search 激活 web_search，同 turn 内 8 个 deferred 工具成功激活可见；stderr 干净。activatedBySearch 保证激活后整 session 保持。
 - 未写自动化测试：bug 只在真实扩展生态（pi-goal-x + xsettings）下复现，单测需完整 pi runtime，属 integration-heavy，按 playbook 跳过。
 
+## 追加：切换到 git 安装暴露的第二个问题（commit 6dcd9b0 + 7ac2eeb）
+
+- `pi remove <本地绝对路径>` 才能移除本地包（相对路径不匹配，pi 按解析后绝对路径识别）。
+- `pi install git:github.com/toRolex/pi-tool-search` 会在克隆目录跑依赖安装，清掉仓库根 vendored 的提升补偿 node_modules；peerDependencies 被抑制安装，`typebox` 从树中消失。
+- `pi-xsettings` 的 `createRequire("typebox/schema")` 走 Node 原生解析，**不经 pi 的扩展模块映射**（映射只覆盖静态 import 的 typebox 根、/compile、/value），于是断链。
+- 修复：改为静态 `import { Check } from "typebox/value"`（host 映射内、本地与 git 安装都解析得到），删除 unknown 守卫 machinery。`proper-lockfile`/`smol-toml` 是声明过的 dependencies，克隆中存活，未动。
+- 同款地雷排查：仓库内其余 createRequire 用法均指向已声明依赖，无同类风险。
+- git 安装下复验：工具列表 10 个无 goal 工具、stderr 空、tool_search 激活回归通过。
+- 教训：vendored 提升补偿只对本地路径安装有效；git 安装的正确姿势是只依赖 host 映射 specifier + 各包自己声明的 dependencies。
+
 ## Deviations
 
 - handoff 主嫌疑"晚注册工具漏网快照"不成立，实测否决；按新证据改打 `before_agent_start` 兜底（handoff 修复方向中的备选项）。
