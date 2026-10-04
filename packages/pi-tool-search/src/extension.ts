@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { migrateDeferredTools, readDeferredTools } from "./config.ts";
+import { migrateDeferredTools } from "./config.ts";
 import { registerToolSearchCodeModeAdapter } from "./code-mode-adapter.ts";
 import { createToolSearchTool } from "./tools/tool-search/definition.ts";
 import { DEFERRED_SECTION_KEY, renderDeferredSection } from "./tools/tool-search/select.ts";
@@ -11,8 +11,7 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 
 export function createToolSearchExtension(pi: ExtensionAPI, configPath: string): void {
 	// Migration must finish (including retryable cleanup) before taking the session snapshot.
-	migrateDeferredTools(configPath, join(dirname(configPath), "xsettings.toml"));
-	const deferredTools = readDeferredTools(configPath);
+	const deferredTools = migrateDeferredTools(configPath, join(dirname(configPath), "xsettings.toml"));
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
 	const activatedBySearch = new Set<string>();
 	const directScope = {
@@ -57,10 +56,14 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	// the deferred names so the model knows what select: can load. `sections` is
 	// typed optional because pi 0.84 (the pinned dev dependency) predates it.
 	pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
-		const deferred = new Set(deferredTools);
-		const active = pi.getActiveTools();
-		const next = active.filter((name: string) => !deferred.has(name) || activatedBySearch.has(name));
-		if (next.length !== active.length) pi.setActiveTools(next);
+		// A nested scope owns its availability; never prune the outer Pi tool set.
+		// Direct sessions still re-assert deferral against other extensions each turn.
+		if (!codeMode.scope()) {
+			const deferred = new Set(deferredTools);
+			const active = pi.getActiveTools();
+			const next = active.filter((name: string) => !deferred.has(name) || activatedBySearch.has(name));
+			if (next.length !== active.length) pi.setActiveTools(next);
+		}
 		const sections = (event.systemPromptOptions as { sections?: Record<string, string> }).sections;
 		if (!sections) return;
 		// A tool counts as loaded when it is in pi's active set, whatever activated it

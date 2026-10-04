@@ -48,15 +48,18 @@ const migrationFileSystem: MigrationFileSystem = {
 	},
 };
 
-/** Existing files (even empty ones) win; cleanup can be retried without migrating again. */
+/** Read once and return the session snapshot; existing files (even empty ones) win.
+ * Cleanup can be retried without migrating again or rereading the new file.
+ */
 export function migrateDeferredTools(
 	configPath: string,
 	legacyPath: string,
 	fs: MigrationFileSystem = migrationFileSystem,
-): void {
+): string[] {
 	let exists = true;
+	let snapshot: string[] = [];
 	try {
-		fs.read(configPath);
+		snapshot = parseDeferredTools(fs.read(configPath));
 	} catch (error) {
 		if (!isMissing(error)) throw error;
 		exists = false;
@@ -65,20 +68,22 @@ export function migrateDeferredTools(
 	try {
 		legacy = fs.read(legacyPath);
 	} catch (error) {
-		if (isMissing(error)) return;
+		if (isMissing(error)) return snapshot;
 		throw error;
 	}
 	const document = parse(legacy) as Record<string, unknown>;
-	if (!Object.hasOwn(document, "tools")) return;
+	if (!Object.hasOwn(document, "tools")) return snapshot;
 	const tools = document.tools as Record<string, unknown>;
 	// Unquoted dotted TOML keys are nested; also accept the quoted legacy spelling.
 	const namespace = tools["pi-tool-search"] as { tools?: unknown } | undefined;
 	const oldNames = tools["pi-tool-search.tools"] ?? namespace?.tools;
 	if (!exists) {
-		if (!Array.isArray(oldNames) || !oldNames.every((name) => typeof name === "string")) return;
+		if (!Array.isArray(oldNames) || !oldNames.every((name) => typeof name === "string")) return snapshot;
+		const source = stringify({ tools: { deferred: oldNames } });
 		try {
 			// Never copy other xsettings sections or pi.defaultTools to the new file.
-			fs.write(configPath, stringify({ tools: { deferred: oldNames } }), true);
+			fs.write(configPath, source, true);
+			snapshot = parseDeferredTools(source);
 		} catch (error) {
 			throw new Error(`Deferred tools migration: cannot write ${configPath}; legacy config retained. Retry initialization after fixing the write failure.`, { cause: error });
 		}
@@ -90,4 +95,5 @@ export function migrateDeferredTools(
 	} catch (error) {
 		throw new Error(`Deferred tools migration: cannot clean ${legacyPath}; ${configPath} is authoritative. Retry initialization to clean the legacy tools section without overwriting the new config.`, { cause: error });
 	}
+	return snapshot;
 }

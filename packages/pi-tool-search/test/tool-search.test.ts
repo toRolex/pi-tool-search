@@ -4,6 +4,8 @@ import { parse } from "smol-toml";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import { createToolSearchExtension } from "../src/extension.ts";
+import { getCodeModeToolAdapterRegistry } from "@luan.sh/pi-code-mode/sdk";
+import { ensureXSettingsRegistry } from "../../pi-xsettings/src/protocol/settings.ts";
 import { migrateDeferredTools, parseDeferredTools, readDeferredTools } from "../src/config.ts";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { configureTuiAppearance, DEFAULT_TUI_APPEARANCE, icon } from "@luan.sh/pi-libtui";
@@ -93,6 +95,24 @@ describe("extension manifest", () => {
 });
 
 describe("deferred config", () => {
+	for (const existing of [true, false]) {
+		test(`initialization reads the authoritative path once (existing: ${existing})`, () => {
+			const legacy = join(configDir, "xsettings.toml");
+			if (existing) configure(["new"]);
+			writeFileSync(legacy, '[tools]\npi-tool-search.tools = ["old"]\n');
+			const reads: string[] = [];
+			const snapshot = migrateDeferredTools(configPath, legacy, {
+				read(path) {
+					reads.push(path);
+					if (reads.filter(value => value === path).length > 1) throw new Error("duplicate read");
+					return readFileSync(path, "utf8");
+				},
+				write: (path, source, exclusive) => writeFileSync(path, source, { flag: exclusive ? "wx" : "w" }),
+			});
+			expect(reads.filter(path => path === configPath)).toHaveLength(1);
+			expect(snapshot).toEqual([existing ? "new" : "old"]);
+		});
+	}
 	test("parses string arrays and ignores non-string entries, empty strings, and duplicates", () => {
 		expect(parseDeferredTools('[tools]\ndeferred = [\n # comment\n "read", \'write\', 1, "", "read",\n]')).toEqual(["read", "write"]);
 	});
@@ -469,7 +489,7 @@ describe("select loading", () => {
 
 type HarnessEvent = { reason?: string; systemPromptOptions?: { sections?: Record<string, string> } };
 
-function extensionHarness(active: string[], tools: ToolMetadata[]) {
+function extensionHarness(active: string[] = [], tools: ToolMetadata[] = []) {
 	const handlers = new Map<string, (event: HarnessEvent) => void>();
 	const updates: string[][] = [];
 	let tool!: ReturnType<typeof createToolSearchTool>;
@@ -484,19 +504,45 @@ function extensionHarness(active: string[], tools: ToolMetadata[]) {
 		on(event: string, handler: (event: HarnessEvent) => void) { handlers.set(event, handler); },
 	} as unknown as ExtensionAPI;
 	createToolSearchExtension(pi, configPath);
-	return { tool, updates, emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value) };
+	return { tool, updates, events: [...handlers.keys()], emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value) };
 }
 
 function registeredAdapter() {
-	return (Reflect.get(globalThis, ADAPTERS_KEY) as {
-		adapters: Map<string, {
-			onScopeChange(scope: ReturnType<ReturnType<typeof toolApi>["scope"]>): void;
-			invoke(input: { query: string }): ReturnType<typeof executeToolSearch>;
-		}>;
-	}).adapters.get(TOOL_SEARCH_NAME)!;
+	const adapter = getCodeModeToolAdapterRegistry().list().find(candidate => candidate.name === TOOL_SEARCH_NAME)!;
+	return {
+		onScopeChange: (scope: ReturnType<ReturnType<typeof toolApi>["scope"]>) => adapter.onScopeChange!(scope),
+		invoke: (input: { query: string }) => adapter.invoke(input, {} as never, new AbortController().signal) as ReturnType<typeof executeToolSearch>,
+	};
 }
 
 describe("single-extension lifecycle", () => {
+	test("stale xsettings publications cannot replace the actual deferred snapshot", async () => {
+		// Install a residual registration in the global Symbol.for registry before init.
+		const registry = ensureXSettingsRegistry();
+		Reflect.set(globalThis, SETTINGS_KEY, registry);
+		const published: unknown[] = [];
+		const unregister = registry.register({
+			namespace: "pi-tool-search",
+			label: "Stale tool search",
+			definitions: [],
+			onValues: values => { published.push(values); },
+		});
+		configure(["weather"]);
+		const active = [TOOL_SEARCH_NAME, "weather", "issues"];
+		const host = extensionHarness(active, active.map(name => metadata(name, name)));
+		try {
+			await registry.publish("pi-tool-search", { tools: ["issues"] });
+			expect(published).toEqual([{ tools: ["issues"] }]);
+			host.emit("session_start");
+			expect(host.updates).toEqual([[TOOL_SEARCH_NAME, "issues"]]);
+			await registry.publish("pi-tool-search", { tools: [] });
+			active.push("weather");
+			host.emit("before_agent_start", { systemPromptOptions: {} });
+			expect(host.updates).toEqual([[TOOL_SEARCH_NAME, "issues"], [TOOL_SEARCH_NAME, "issues"]]);
+			const loaded = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+			expect(loaded.details.activation.added).toEqual(["weather"]);
+		} finally { unregister(); }
+	});
 	test("TOML alone defers and select activation survives successive turns", async () => {
 		configure(["weather", "other", "unknown"]);
 		expect(Reflect.has(globalThis, SETTINGS_KEY)).toBe(false);
@@ -518,7 +564,7 @@ describe("single-extension lifecycle", () => {
 		expect(Reflect.has(globalThis, SETTINGS_KEY)).toBe(false);
 	});
 
-	test("nested select stays isolated across turns but does not protect outer reactivation", async () => {
+	test("nested select preserves outer availability and nested activation across turns", async () => {
 		configure(["weather"]);
 		const active = [TOOL_SEARCH_NAME, "exec", "weather"];
 		const tools = [TOOL_SEARCH_NAME, "exec", "weather"].map(name => metadata(name, name));
@@ -538,15 +584,10 @@ describe("single-extension lifecycle", () => {
 		for (let turn = 0; turn < 2; turn++) {
 			if (!active.includes("weather")) active.push("weather");
 			host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
-			expect(active).toEqual([TOOL_SEARCH_NAME, "exec"]);
+			expect(active).toEqual([TOOL_SEARCH_NAME, "exec", "weather"]);
 			expect(nested).toEqual(["sibling", "weather"]);
+			expect(host.updates).toEqual([]);
 		}
-		// Nested activation never enters directScope's activatedBySearch set.
-		const direct = await host.tool.execute("direct", { query: "select:weather" }, undefined, undefined, {} as never);
-		expect(direct.details.activation.added).toEqual(["weather"]);
-		host.emit("before_agent_start", { systemPromptOptions: {} });
-		expect(active).toEqual([TOOL_SEARCH_NAME, "exec", "weather"]);
-		expect(nested).toEqual(["sibling", "weather"]);
 	});
 
 	for (const reason of ["reload", "quit"]) {
@@ -554,24 +595,22 @@ describe("single-extension lifecycle", () => {
 			configure(["weather"]);
 			const tools = [TOOL_SEARCH_NAME, "read", "weather"].map(name => metadata(name, name));
 			const host = extensionHarness([TOOL_SEARCH_NAME, "read", "weather"], tools);
-			const previous = registeredAdapter();
+			const registry = getCodeModeToolAdapterRegistry();
+			const previous = registry.list()[0];
 			host.emit("session_shutdown", { reason: "other" });
-			expect(registeredAdapter()).toBe(previous);
+			expect(registry.list()).toEqual([previous]);
 			host.emit("session_shutdown", { reason });
-			const registry = Reflect.get(globalThis, ADAPTERS_KEY) as { adapters: Map<string, unknown>; list(): unknown[] };
-			expect(registry.adapters.size).toBe(0);
 			expect(registry.list()).toEqual([]);
 			configure(["read"]);
 			const active = [TOOL_SEARCH_NAME, "read", "weather"];
 			const fresh = extensionHarness(active, tools);
-			expect(registeredAdapter()).not.toBe(previous);
-			expect(registry.adapters.size).toBe(1);
+			expect(registry.list()).toHaveLength(1);
+			expect(registry.list()[0]).not.toBe(previous);
 			fresh.emit("session_start");
 			expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
 			const result = await fresh.tool.execute("new", { query: "select:read" }, undefined, undefined, {} as never);
 			expect(result.details.activation.added).toEqual(["read"]);
 			fresh.emit("session_shutdown", { reason });
-			expect(registry.adapters.size).toBe(0);
 			expect(registry.list()).toEqual([]);
 		});
 	}
@@ -597,138 +636,76 @@ describe("dynamic loading", () => {
 		const names = Array.from({ length: 25 }, (_, index) => `tool_${index}`);
 		writeFileSync(legacy, `[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["direct"]\n`);
 		const active = [TOOL_SEARCH_NAME, "direct", ...names];
-		const handlers = new Map<string, () => void>();
 		const tools = [metadata(TOOL_SEARCH_NAME, "Search"), metadata("direct", "Direct"), ...names.map((name) => metadata(name, "Deferred"))];
-		const pi = {
-			registerTool() {},
-			getAllTools: () => tools,
-			getActiveTools: () => [...active],
-			setActiveTools: (next: string[]) => active.splice(0, active.length, ...next),
-			on: (event: string, handler: () => void) => handlers.set(event, handler),
-		} as unknown as ExtensionAPI;
-		createToolSearchExtension(pi, configPath);
+		const host = extensionHarness(active, tools);
 		expect(new Set(readDeferredTools(configPath))).toEqual(new Set(names));
 		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
 		configure(["direct"]);
 		const migratedLegacy = readFileSync(legacy, "utf8");
 		for (let session = 0; session < 2; session++) {
 			active.splice(0, active.length, TOOL_SEARCH_NAME, "direct", ...names);
-			await handlers.get("session_start")!();
+			host.emit("session_start");
 			expect(active).toEqual([TOOL_SEARCH_NAME, "direct"]);
 		}
 		expect(readDeferredTools(configPath)).toEqual(["direct"]);
 		expect(readFileSync(legacy, "utf8")).toBe(migratedLegacy);
 	});
 
-	test("registers tool_search as a normal Pi tool", () => {
-		const registered: unknown[] = [];
+	test("registers tool_search as a normal Pi tool", async () => {
 		expect(toolSearchExtension.length).toBe(1);
-		createToolSearchExtension({
-			registerTool: (tool: unknown) => {
-				registered.push(tool);
-			},
-			on() {},
-		} as unknown as ExtensionAPI, configPath);
-
-		expect(registered).toHaveLength(1);
-		expect(registered[0]).toMatchObject({ name: TOOL_SEARCH_NAME });
-		const adapters = Reflect.get(globalThis, ADAPTERS_KEY) as { adapters: Map<string, { name: string }> };
-		expect(adapters.adapters.get(TOOL_SEARCH_NAME)).toMatchObject({ name: TOOL_SEARCH_NAME });
+		const host = extensionHarness();
+		expect(host.tool).toMatchObject({ name: TOOL_SEARCH_NAME });
+		// The public Code Mode capability is invocable once a scope is assigned.
+		const adapter = registeredAdapter();
+		adapter.onScopeChange(toolApi([], []).scope());
+		const result = await adapter.invoke({ query: "select:missing" });
+		expect(result.details.status).toBe("invalid_select");
 	});
 
 	test("owns deferred selection lifecycle without another hierarchy provider", () => {
-		const handlers: string[] = [];
-		const pi = {
-			registerTool() {},
-			on(event: string) {
-				handlers.push(event);
-			},
-		} as unknown as ExtensionAPI;
-
-		createToolSearchExtension(pi, configPath);
-
-		expect(handlers).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
+		const host = extensionHarness();
+		expect(host.events).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
 	});
 
 	test("defers only configured active tools without registering xsettings options", async () => {
 		const active = [TOOL_SEARCH_NAME, "deferred_weather", "direct_issues"];
-		const handlers = new Map<string, Array<() => void | Promise<void>>>();
 		const tools = [
 			metadata(TOOL_SEARCH_NAME, "Search tools."),
 			metadata("deferred_weather", "Weather data."),
 			metadata("direct_issues", "Issue data."),
 			metadata("disabled_weather", "Disabled weather data."),
 		];
-		const pi = {
-			registerTool() {},
-			getAllTools: () => tools,
-			getActiveTools: () => [...active],
-			setActiveTools: (names: string[]) => active.splice(0, active.length, ...names),
-			on(event: string, handler: () => void | Promise<void>) {
-				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
-			},
-		} as unknown as ExtensionAPI;
-
 		configure(["deferred_weather", "disabled_weather"]);
-		createToolSearchExtension(pi, configPath);
+		const host = extensionHarness(active, tools);
 		// Session startup must use the factory snapshot, not reread the changed file.
 		configure(["direct_issues"]);
-		for (const handler of handlers.get("session_start") ?? []) await handler();
+		host.emit("session_start");
 
 		expect(active).toEqual([TOOL_SEARCH_NAME, "direct_issues"]);
 	});
 
 	test("uses sibling Code Mode tools when tool_search is under exec", async () => {
-		const handlers = new Map<string, Array<() => void | Promise<void>>>();
 		const activeNested = ["exec_command", "write_stdin"];
 		const activeOuter = ["exec", TOOL_SEARCH_NAME, "read"];
-		const outerUpdates: string[][] = [];
 		const nestedTools = [
 			metadata("exec_command", "Run a shell command."),
 			metadata("write_stdin", "Continue a command."),
 		];
-		const pi = {
-			registerTool() {},
-			getAllTools: () => [metadata(TOOL_SEARCH_NAME, "Search tools."), ...nestedTools],
-			getActiveTools: () => [...activeOuter],
-			setActiveTools(names: string[]) {
-				activeOuter.splice(0, activeOuter.length, ...names);
-				outerUpdates.push([...names]);
-			},
-			on(event: string, handler: () => void | Promise<void>) {
-				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
-			},
-		} as unknown as ExtensionAPI;
-
 		configure(["exec_command"]);
-		createToolSearchExtension(pi, configPath);
-		const adapter = (
-			Reflect.get(globalThis, ADAPTERS_KEY) as {
-				adapters: Map<
-					string,
-					{
-						onScopeChange(scope: {
-							tools(): typeof nestedTools;
-							active(): string[];
-							setActive(names: readonly string[]): void;
-						}): void;
-						invoke(input: { query: string; limit?: number }): Promise<unknown>;
-					}
-				>;
-			}
-		).adapters.get(TOOL_SEARCH_NAME)!;
+		const host = extensionHarness(activeOuter, [metadata(TOOL_SEARCH_NAME, "Search tools."), ...nestedTools]);
+		const adapter = registeredAdapter();
 		adapter.onScopeChange({
 			tools: () => nestedTools,
 			active: () => [...activeNested],
 			setActive: (names) => activeNested.splice(0, activeNested.length, ...names),
 		});
-		for (const handler of handlers.get("session_start") ?? []) await handler();
+		host.emit("session_start");
 
 		expect(activeNested).toEqual(["write_stdin"]);
 		await adapter.invoke({ query: "shell command" });
 		expect(activeNested).toEqual(["write_stdin", "exec_command"]);
 		expect(activeOuter).toEqual(["exec", TOOL_SEARCH_NAME, "read"]);
-		expect(outerUpdates).toEqual([]);
+		expect(host.updates).toEqual([]);
 	});
 
 	test("excludes active tools and activates matches additively", async () => {
