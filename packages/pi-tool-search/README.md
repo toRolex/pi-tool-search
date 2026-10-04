@@ -69,16 +69,23 @@ owner changes the scope.
 
 ## Deferred-tool configuration
 
-Create `~/.pi/agent/tool-search.toml`:
+Configure `~/.pi/agent/tool-search.toml`:
 
 ```toml
 [tools]
+# Comments are supported.
 deferred = ["exec_command", "web__run"]
 ```
 
-`tools.deferred` is an array of tool-name strings. Missing file or key means no
-configured deferred tools. Invalid TOML is reported as an error. Configuration
+`tools.deferred` is an array of tool-name strings. A missing file or key means
+an empty deferred list. Invalid TOML is reported as an error. Configuration
 is read once when the extension initializes; changes apply after `/reload`.
+An existing new-format file takes precedence. On first initialization, an
+existing legacy `[tools]` section in `xsettings.toml` is migrated once, then
+removed from that file; all other sections are preserved. `/xsettings` is no
+longer provided by this fork. The activity indicator falls back to Pi's native
+spinner. `pi.defaultTools` is deprecated and not migrated because it has no
+consumer.
 
 ## Use the tool
 

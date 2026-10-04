@@ -7,6 +7,14 @@ in one `xsettings.toml` file, exposes a UI-free SDK
 settings, and binds keys from `keybindings.json` to actions that extensions
 register through pi-libactions.
 
+## Fork integration note
+
+This package remains in the repository for consumers that install it directly,
+but the pi-tool-search fork no longer loads its extension. In that fork,
+`/xsettings` is not provided; deferred tools are configured in
+`~/.pi/agent/tool-search.toml` and changes take effect after `/reload`. The
+fork's status indicator falls back to Pi's native spinner.
+
 ## Preview
 
 ![@luan.sh/pi-xsettings in Bootty](https://pi.luan.sh/media/previews/pi-xsettings-25c1f13ef32f.png)
