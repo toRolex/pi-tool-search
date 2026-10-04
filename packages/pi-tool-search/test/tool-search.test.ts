@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { parse } from "smol-toml";
 import { tmpdir } from "os";
 import { join } from "path";
 import { createToolSearchExtension } from "../src/extension.ts";
-import { parseDeferredTools, readDeferredTools } from "../src/config.ts";
+import { migrateDeferredTools, parseDeferredTools, readDeferredTools } from "../src/config.ts";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { configureTuiAppearance, DEFAULT_TUI_APPEARANCE, icon } from "@luan.sh/pi-libtui";
 import toolSearchExtension from "../src/extension.ts";
@@ -98,6 +99,115 @@ describe("deferred config", () => {
 		expect(() => readDeferredTools(configDir)).toThrow();
 		writeFileSync(configPath, "[tools\ndeferred = [");
 		expect(() => readDeferredTools(configPath)).toThrow();
+	});
+	test("migrates the 25-name set, writes only deferred, preserves other section values, and is idempotent", () => {
+		const legacy = join(configDir, "xsettings.toml");
+		const names = Array.from({ length: 25 }, (_, i) => `tool_${i}`);
+		writeFileSync(legacy, `[appearance]\ntheme = "keep"\n\n[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["ignore"]\n\n[behavior]\nx = true\n`);
+		migrateDeferredTools(configPath, legacy);
+		expect(new Set(readDeferredTools(configPath))).toEqual(new Set(names));
+		expect(parse(readFileSync(configPath, "utf8"))).toEqual({ tools: { deferred: names } });
+		expect(parse(readFileSync(legacy, "utf8"))).toEqual({ appearance: { theme: "keep" }, behavior: { x: true } });
+		const before = [readFileSync(configPath, "utf8"), readFileSync(legacy, "utf8")];
+		migrateDeferredTools(configPath, legacy, {
+			read: (path) => readFileSync(path, "utf8"),
+			write() { throw new Error("repeat initialization must not write"); },
+		});
+		expect([readFileSync(configPath, "utf8"), readFileSync(legacy, "utf8")]).toEqual(before);
+	});
+	test("existing new config wins and legacy list is cleaned", () => {
+		writeFileSync(configPath, '[tools]\ndeferred = ["new"]');
+		const legacy = join(configDir, "xsettings.toml");
+		writeFileSync(legacy, '[tools]\npi-tool-search.tools = ["old"]\n');
+		migrateDeferredTools(configPath, legacy);
+		expect(readDeferredTools(configPath)).toEqual(["new"]);
+		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
+	});
+
+	test("an existing empty config is authoritative and is not overwritten", () => {
+		writeFileSync(configPath, "");
+		const legacy = join(configDir, "xsettings.toml");
+		writeFileSync(legacy, '[tools]\n"pi-tool-search.tools" = ["old"]\n');
+		migrateDeferredTools(configPath, legacy);
+		expect(readFileSync(configPath, "utf8")).toBe("");
+		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
+	});
+
+	test("missing legacy file is a no-op, with or without an existing new file", () => {
+		const legacy = join(configDir, "xsettings.toml");
+		migrateDeferredTools(configPath, legacy);
+		expect(existsSync(configPath)).toBe(false);
+		configure(["new"]);
+		migrateDeferredTools(configPath, legacy);
+		expect(readDeferredTools(configPath)).toEqual(["new"]);
+		expect(existsSync(legacy)).toBe(false);
+	});
+
+	test("does not migrate pi.defaultTools alone or discard legacy before a valid migration", () => {
+		const legacy = join(configDir, "xsettings.toml");
+		for (const source of ['[tools]\npi.defaultTools = ["read"]\n', '[tools]\npi-tool-search.tools = "invalid"\n']) {
+			writeFileSync(legacy, source);
+			migrateDeferredTools(configPath, legacy);
+			expect(existsSync(configPath)).toBe(false);
+			expect(readFileSync(legacy, "utf8")).toBe(source);
+		}
+	});
+
+	test("removes the entire tools tree while preserving multiline and quoted-table values", () => {
+		const legacy = join(configDir, "xsettings.toml");
+		const source = `[appearance]\nnote = '''keep\n[tools]\nthis is text'''\n["tools"] # quoted header\n"pi-tool-search.tools" = ["old"]\n[tools.nested]\nvalue = 1\n["behavior"]\nenabled = true\n[custom.tools]\nvalue = "keep"\n`;
+		writeFileSync(legacy, source);
+		migrateDeferredTools(configPath, legacy);
+		const expected = parse(source);
+		delete expected.tools;
+		expect(parse(readFileSync(legacy, "utf8"))).toEqual(expected);
+		expect(readDeferredTools(configPath)).toEqual(["old"]);
+	});
+
+	test("a new-file write failure retains legacy and reports a retry with the cause", () => {
+		const legacy = join(configDir, "xsettings.toml");
+		const source = '[tools]\npi-tool-search.tools = ["old"]\n';
+		writeFileSync(legacy, source);
+		const failure = new Error("injected write failure");
+		let caught: unknown;
+		try {
+			migrateDeferredTools(configPath, legacy, {
+				read: (path) => readFileSync(path, "utf8"),
+				write() { throw failure; },
+			});
+		} catch (error) { caught = error; }
+		expect(caught).toBeInstanceOf(Error);
+		expect((caught as Error).message).toContain("legacy config retained. Retry initialization");
+		expect((caught as Error).cause).toBe(failure);
+		expect(readFileSync(legacy, "utf8")).toBe(source);
+		expect(existsSync(configPath)).toBe(false);
+	});
+
+	test("cleanup failure reports retry; retry only cleans and does not rewrite the migrated file", () => {
+		const legacy = join(configDir, "xsettings.toml");
+		const source = '[tools]\npi-tool-search.tools = ["old"]\n';
+		writeFileSync(legacy, source);
+		const writes: string[] = [];
+		expect(() => migrateDeferredTools(configPath, legacy, {
+			read: (path) => readFileSync(path, "utf8"),
+			write(path, value, exclusive) {
+				writes.push(path);
+				if (path === legacy) throw new Error("injected cleanup failure");
+				writeFileSync(path, value, { flag: exclusive ? "wx" : "w" });
+			},
+		})).toThrow("Retry initialization to clean the legacy tools section without overwriting the new config");
+		expect(readDeferredTools(configPath)).toEqual(["old"]);
+		expect(readFileSync(legacy, "utf8")).toBe(source);
+		migrateDeferredTools(configPath, legacy, {
+			read: (path) => readFileSync(path, "utf8"),
+			write(path, value) {
+				writes.push(path);
+				if (path === configPath) throw new Error("must not overwrite");
+				writeFileSync(path, value);
+			},
+		});
+		expect(writes).toEqual([configPath, legacy, legacy]);
+		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
 	});
 });
 
@@ -350,6 +460,34 @@ describe("select loading", () => {
 });
 
 describe("dynamic loading", () => {
+	test("migrates before the extension snapshot and uses it for the active tool list on repeated sessions", async () => {
+		const legacy = join(configDir, "xsettings.toml");
+		const names = Array.from({ length: 25 }, (_, index) => `tool_${index}`);
+		writeFileSync(legacy, `[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["direct"]\n`);
+		const active = [TOOL_SEARCH_NAME, "direct", ...names];
+		const handlers = new Map<string, () => void>();
+		const tools = [metadata(TOOL_SEARCH_NAME, "Search"), metadata("direct", "Direct"), ...names.map((name) => metadata(name, "Deferred"))];
+		const pi = {
+			registerTool() {},
+			getAllTools: () => tools,
+			getActiveTools: () => [...active],
+			setActiveTools: (next: string[]) => active.splice(0, active.length, ...next),
+			on: (event: string, handler: () => void) => handlers.set(event, handler),
+		} as unknown as ExtensionAPI;
+		createToolSearchExtension(pi, configPath);
+		expect(new Set(readDeferredTools(configPath))).toEqual(new Set(names));
+		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
+		configure(["direct"]);
+		const migratedLegacy = readFileSync(legacy, "utf8");
+		for (let session = 0; session < 2; session++) {
+			active.splice(0, active.length, TOOL_SEARCH_NAME, "direct", ...names);
+			await handlers.get("session_start")!();
+			expect(active).toEqual([TOOL_SEARCH_NAME, "direct"]);
+		}
+		expect(readDeferredTools(configPath)).toEqual(["direct"]);
+		expect(readFileSync(legacy, "utf8")).toBe(migratedLegacy);
+	});
+
 	test("registers tool_search as a normal Pi tool", () => {
 		const registered: unknown[] = [];
 		expect(toolSearchExtension.length).toBe(1);

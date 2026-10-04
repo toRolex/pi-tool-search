@@ -1,5 +1,6 @@
+import { dirname, join } from "node:path";
 import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { readDeferredTools } from "./config.ts";
+import { migrateDeferredTools, readDeferredTools } from "./config.ts";
 import { registerToolSearchCodeModeAdapter } from "./code-mode-adapter.ts";
 import { createToolSearchTool } from "./tools/tool-search/definition.ts";
 import { DEFERRED_SECTION_KEY, renderDeferredSection } from "./tools/tool-search/select.ts";
@@ -9,6 +10,8 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 }
 
 export function createToolSearchExtension(pi: ExtensionAPI, configPath: string): void {
+	// Migration must finish (including retryable cleanup) before taking the session snapshot.
+	migrateDeferredTools(configPath, join(dirname(configPath), "xsettings.toml"));
 	const deferredTools = readDeferredTools(configPath);
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
 	const activatedBySearch = new Set<string>();
