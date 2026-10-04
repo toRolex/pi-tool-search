@@ -11,7 +11,6 @@
   "pi": {
     "extensions": [
       "./packages/pi-tool-search/src/extension.ts",
-      "./packages/pi-tool-search/node_modules/@luan.sh/pi-libtui/src/extension.ts",
       "./packages/pi-xsettings/src/extension.ts",
       "./packages/pi-xsettings/node_modules/@luan.sh/pi-libtui/src/extension.ts"
     ]
