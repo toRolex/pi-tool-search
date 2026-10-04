@@ -1,0 +1,19 @@
+{
+  "name": "@toRolex/pi-tool-search",
+  "version": "0.3.8",
+  "description": "Maintained fork of @luan.sh/pi-tool-search: Claude-Code-style deferred tool loading for Pi",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toRolex/pi-tool-search.git"
+  },
+  "pi": {
+    "extensions": [
+      "./packages/pi-tool-search/src/extension.ts",
+      "./packages/pi-tool-search/node_modules/@luan.sh/pi-libtui/src/extension.ts",
+      "./packages/pi-xsettings/src/extension.ts",
+      "./packages/pi-xsettings/node_modules/@luan.sh/pi-libtui/src/extension.ts"
+    ]
+  }
+}
