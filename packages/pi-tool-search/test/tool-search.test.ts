@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { parse } from "smol-toml";
 import { tmpdir } from "os";
-import { join } from "path";
+import { join, resolve } from "path";
 import { createToolSearchExtension } from "../src/extension.ts";
 import { migrateDeferredTools, parseDeferredTools, readDeferredTools } from "../src/config.ts";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
@@ -83,6 +83,14 @@ function toolApi(tools: ToolMetadata[], active: string[]) {
 		updates,
 	};
 }
+
+describe("extension manifest", () => {
+	test("loads exactly the tool-search extension", () => {
+		const manifest = JSON.parse(readFileSync(resolve(import.meta.dir, "../../../package.json"), "utf8"));
+		expect(manifest.pi.extensions).toEqual(["./packages/pi-tool-search/src/extension.ts"]);
+		expect(manifest.pi.extensions).toHaveLength(1);
+	});
+});
 
 describe("deferred config", () => {
 	test("parses string arrays and ignores non-string entries, empty strings, and duplicates", () => {
@@ -459,6 +467,130 @@ describe("select loading", () => {
 	});
 });
 
+type HarnessEvent = { reason?: string; systemPromptOptions?: { sections?: Record<string, string> } };
+
+function extensionHarness(active: string[], tools: ToolMetadata[]) {
+	const handlers = new Map<string, (event: HarnessEvent) => void>();
+	const updates: string[][] = [];
+	let tool!: ReturnType<typeof createToolSearchTool>;
+	const pi = {
+		registerTool(value: typeof tool) { tool = value; },
+		getAllTools: () => tools,
+		getActiveTools: () => [...active],
+		setActiveTools(names: string[]) {
+			active.splice(0, active.length, ...names);
+			updates.push([...names]);
+		},
+		on(event: string, handler: (event: HarnessEvent) => void) { handlers.set(event, handler); },
+	} as unknown as ExtensionAPI;
+	createToolSearchExtension(pi, configPath);
+	return { tool, updates, emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value) };
+}
+
+function registeredAdapter() {
+	return (Reflect.get(globalThis, ADAPTERS_KEY) as {
+		adapters: Map<string, {
+			onScopeChange(scope: ReturnType<ReturnType<typeof toolApi>["scope"]>): void;
+			invoke(input: { query: string }): ReturnType<typeof executeToolSearch>;
+		}>;
+	}).adapters.get(TOOL_SEARCH_NAME)!;
+}
+
+describe("single-extension lifecycle", () => {
+	test("TOML alone defers and select activation survives successive turns", async () => {
+		configure(["weather", "other", "unknown"]);
+		expect(Reflect.has(globalThis, SETTINGS_KEY)).toBe(false);
+		const active = [TOOL_SEARCH_NAME, "read", "weather", "other"];
+		const tools = [TOOL_SEARCH_NAME, "read", "weather", "other"].map(name => metadata(name, name));
+		const host = extensionHarness(active, tools);
+		host.emit("session_start");
+		expect(active).toEqual([TOOL_SEARCH_NAME, "read"]);
+		const result = await host.tool.execute("call", { query: "select:weather" }, undefined, undefined, {} as never);
+		expect(result.details.activation.added).toEqual(["weather"]);
+		for (let turn = 0; turn < 3; turn++) {
+			active.push("other");
+			const sections: Record<string, string> = {};
+			host.emit("before_agent_start", { systemPromptOptions: { sections } });
+			expect(active).toEqual([TOOL_SEARCH_NAME, "read", "weather"]);
+			expect(sections[DEFERRED_SECTION_KEY]).toContain("other");
+			expect(sections[DEFERRED_SECTION_KEY]).not.toContain("weather");
+		}
+		expect(Reflect.has(globalThis, SETTINGS_KEY)).toBe(false);
+	});
+
+	test("nested select stays isolated across turns but does not protect outer reactivation", async () => {
+		configure(["weather"]);
+		const active = [TOOL_SEARCH_NAME, "exec", "weather"];
+		const tools = [TOOL_SEARCH_NAME, "exec", "weather"].map(name => metadata(name, name));
+		const host = extensionHarness(active, tools);
+		const nested = ["weather", "sibling"];
+		const { scope } = toolApi([metadata("weather", "Weather"), metadata("sibling", "Sibling")], nested);
+		const adapter = registeredAdapter();
+		adapter.onScopeChange(scope("weather", "sibling"));
+		host.emit("session_start");
+		expect(nested).toEqual(["sibling"]);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "exec", "weather"]);
+		expect(host.updates).toEqual([]);
+		const result = await adapter.invoke({ query: "select:weather" });
+		expect(result.details.activation.added).toEqual(["weather"]);
+		expect(nested).toEqual(["sibling", "weather"]);
+		expect(host.updates).toEqual([]);
+		for (let turn = 0; turn < 2; turn++) {
+			if (!active.includes("weather")) active.push("weather");
+			host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+			expect(active).toEqual([TOOL_SEARCH_NAME, "exec"]);
+			expect(nested).toEqual(["sibling", "weather"]);
+		}
+		// Nested activation never enters directScope's activatedBySearch set.
+		const direct = await host.tool.execute("direct", { query: "select:weather" }, undefined, undefined, {} as never);
+		expect(direct.details.activation.added).toEqual(["weather"]);
+		host.emit("before_agent_start", { systemPromptOptions: {} });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "exec", "weather"]);
+		expect(nested).toEqual(["sibling", "weather"]);
+	});
+
+	for (const reason of ["reload", "quit"]) {
+		test(`${reason} disposes the adapter before fresh initialization`, async () => {
+			configure(["weather"]);
+			const tools = [TOOL_SEARCH_NAME, "read", "weather"].map(name => metadata(name, name));
+			const host = extensionHarness([TOOL_SEARCH_NAME, "read", "weather"], tools);
+			const previous = registeredAdapter();
+			host.emit("session_shutdown", { reason: "other" });
+			expect(registeredAdapter()).toBe(previous);
+			host.emit("session_shutdown", { reason });
+			const registry = Reflect.get(globalThis, ADAPTERS_KEY) as { adapters: Map<string, unknown>; list(): unknown[] };
+			expect(registry.adapters.size).toBe(0);
+			expect(registry.list()).toEqual([]);
+			configure(["read"]);
+			const active = [TOOL_SEARCH_NAME, "read", "weather"];
+			const fresh = extensionHarness(active, tools);
+			expect(registeredAdapter()).not.toBe(previous);
+			expect(registry.adapters.size).toBe(1);
+			fresh.emit("session_start");
+			expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+			const result = await fresh.tool.execute("new", { query: "select:read" }, undefined, undefined, {} as never);
+			expect(result.details.activation.added).toEqual(["read"]);
+			fresh.emit("session_shutdown", { reason });
+			expect(registry.adapters.size).toBe(0);
+			expect(registry.list()).toEqual([]);
+		});
+	}
+
+	test("call and result previews render without an extension host", async () => {
+		configureTuiAppearance({ iconPack: "emoji" });
+		configure(["weather"]);
+		const host = extensionHarness([TOOL_SEARCH_NAME, "weather"], [metadata(TOOL_SEARCH_NAME, "Search"), metadata("weather", "Forecast")]);
+		host.emit("session_start");
+		const context = { args: { query: "select:weather" }, executionStarted: true, invalidate() {}, isError: false, lastComponent: undefined };
+		const call = host.tool.renderCall!({ query: "select:weather" }, presentationTheme, { ...context, executionStarted: false } as never);
+		expect(Bun.stripANSI(call.render(80).join("\n"))).toContain("select:weather");
+		const result = await host.tool.execute("preview", { query: "select:weather" }, undefined, undefined, {} as never);
+		const rendered = Bun.stripANSI(renderToolSearchResult(result, presentationTheme, context, true).render(80).join("\n"));
+		expect(rendered).toContain("Loaded tools");
+		expect(rendered).toContain("weather");
+	});
+});
+
 describe("dynamic loading", () => {
 	test("migrates before the extension snapshot and uses it for the active tool list on repeated sessions", async () => {
 		const legacy = join(configDir, "xsettings.toml");
@@ -521,22 +653,6 @@ describe("dynamic loading", () => {
 	test("defers only configured active tools without registering xsettings options", async () => {
 		const active = [TOOL_SEARCH_NAME, "deferred_weather", "direct_issues"];
 		const handlers = new Map<string, Array<() => void | Promise<void>>>();
-		let settingsRegistrations = 0;
-		Reflect.set(globalThis, SETTINGS_KEY, {
-			protocol: "pi-xsettings/registry/v1",
-			version: 1,
-			registrations: {},
-			values: {},
-			listeners: [],
-			register() {
-				settingsRegistrations++;
-				return () => undefined;
-			},
-			async publish() {},
-			onRegister() {
-				throw new Error("tool-search must not subscribe to xsettings");
-			},
-		});
 		const tools = [
 			metadata(TOOL_SEARCH_NAME, "Search tools."),
 			metadata("deferred_weather", "Weather data."),
@@ -560,28 +676,13 @@ describe("dynamic loading", () => {
 		for (const handler of handlers.get("session_start") ?? []) await handler();
 
 		expect(active).toEqual([TOOL_SEARCH_NAME, "direct_issues"]);
-		expect(settingsRegistrations).toBe(0);
 	});
 
 	test("uses sibling Code Mode tools when tool_search is under exec", async () => {
 		const handlers = new Map<string, Array<() => void | Promise<void>>>();
-		let settingsRegistrations = 0;
-		Reflect.set(globalThis, SETTINGS_KEY, {
-			protocol: "pi-xsettings/registry/v1",
-			version: 1,
-			registrations: {},
-			values: {},
-			listeners: [],
-			register() {
-				settingsRegistrations++;
-				return () => undefined;
-			},
-			async publish() {},
-			onRegister() {
-				throw new Error("tool-search must not subscribe to xsettings");
-			},
-		});
 		const activeNested = ["exec_command", "write_stdin"];
+		const activeOuter = ["exec", TOOL_SEARCH_NAME, "read"];
+		const outerUpdates: string[][] = [];
 		const nestedTools = [
 			metadata("exec_command", "Run a shell command."),
 			metadata("write_stdin", "Continue a command."),
@@ -589,8 +690,11 @@ describe("dynamic loading", () => {
 		const pi = {
 			registerTool() {},
 			getAllTools: () => [metadata(TOOL_SEARCH_NAME, "Search tools."), ...nestedTools],
-			getActiveTools: () => ["exec", "wait"],
-			setActiveTools() {},
+			getActiveTools: () => [...activeOuter],
+			setActiveTools(names: string[]) {
+				activeOuter.splice(0, activeOuter.length, ...names);
+				outerUpdates.push([...names]);
+			},
 			on(event: string, handler: () => void | Promise<void>) {
 				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
 			},
@@ -621,9 +725,10 @@ describe("dynamic loading", () => {
 		for (const handler of handlers.get("session_start") ?? []) await handler();
 
 		expect(activeNested).toEqual(["write_stdin"]);
-		expect(settingsRegistrations).toBe(0);
 		await adapter.invoke({ query: "shell command" });
 		expect(activeNested).toEqual(["write_stdin", "exec_command"]);
+		expect(activeOuter).toEqual(["exec", TOOL_SEARCH_NAME, "read"]);
+		expect(outerUpdates).toEqual([]);
 	});
 
 	test("excludes active tools and activates matches additively", async () => {
@@ -906,23 +1011,6 @@ describe("dynamic loading", () => {
 	test("publishes deferred names as a system-prompt section each turn", async () => {
 		type PromptEvent = { systemPromptOptions: { sections: Record<string, string> } };
 		const handlers = new Map<string, Array<(event?: PromptEvent) => void | Promise<void>>>();
-		Reflect.set(globalThis, SETTINGS_KEY, {
-			protocol: "pi-xsettings/registry/v1",
-			version: 1,
-			registrations: {},
-			values: {},
-			listeners: [],
-			register(registration: {
-				onValues?: (values: Record<string, string[]>) => void;
-			}) {
-				registration.onValues?.({ tools: ["deferred_weather"] });
-				return () => undefined;
-			},
-			async publish() {},
-			onRegister() {
-				return () => undefined;
-			},
-		});
 		const active = [TOOL_SEARCH_NAME, "deferred_weather"];
 		const tools = [metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("deferred_weather", "Weather data.")];
 		let registeredTool: { execute: (id: string, parameters: { query: string }) => Promise<unknown> } | undefined;
