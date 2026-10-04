@@ -9,16 +9,17 @@ interface TypeboxSchemaModule {
 }
 
 // type-boundary: createRequire returns an untyped CommonJS namespace; isTypeboxSchemaModule validates its one used export.
-type UntrustedTypeboxSchemaModule = unknown;
-
-function isTypeboxSchemaModule(value: UntrustedTypeboxSchemaModule): value is TypeboxSchemaModule {
+function isTypeboxSchemaModule(value: unknown): value is TypeboxSchemaModule {
 	return typeof value === "object" && value !== null && "Check" in value && typeof value.Check === "function";
 }
 
 function loadSchemaModule(): TypeboxSchemaModule {
 	const localRequire = createRequire(realpathSync(fileURLToPath(import.meta.url)));
-	const loaded: UntrustedTypeboxSchemaModule = localRequire("typebox/schema");
-	if (!isTypeboxSchemaModule(loaded)) throw new Error("typebox/schema does not export Check().");
+	// typebox/value, not typebox/schema: Pi's extension module map covers only
+	// the root, /compile, and /value specifiers, so a git install (where no
+	// vendored hoisted copy exists) cannot resolve typebox/schema.
+	const loaded: unknown = localRequire("typebox/value");
+	if (!isTypeboxSchemaModule(loaded)) throw new Error("typebox/value does not export Check().");
 	return loaded;
 }
 
