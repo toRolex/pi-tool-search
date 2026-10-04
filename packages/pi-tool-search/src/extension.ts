@@ -1,7 +1,6 @@
 import { dirname, join } from "node:path";
 import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { migrateDeferredTools } from "./config.ts";
-import { registerToolSearchCodeModeAdapter } from "./code-mode-adapter.ts";
 import { createToolSearchTool } from "./tools/tool-search/definition.ts";
 import { DEFERRED_SECTION_KEY, renderDeferredSection } from "./tools/tool-search/select.ts";
 
@@ -12,6 +11,7 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 export function createToolSearchExtension(pi: ExtensionAPI, configPath: string): void {
 	// Migration must finish (including retryable cleanup) before taking the session snapshot.
 	const deferredTools = migrateDeferredTools(configPath, join(dirname(configPath), "xsettings.toml"));
+	const deferredSet = new Set(deferredTools);
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
 	const activatedBySearch = new Set<string>();
 	const directScope = {
@@ -33,19 +33,15 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	};
 	const tool = createToolSearchTool(directScope, getDeferredNames);
 	pi.registerTool(tool);
-	const codeMode = registerToolSearchCodeModeAdapter(tool, getDeferredNames);
 	pi.on("session_start", () => {
-		const nestedScope = codeMode.scope();
 		const activeTools = pi.getActiveTools();
 		const active = new Set(activeTools);
 		directTools = pi.getAllTools().filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
-		const deferred = new Set(deferredTools);
-		const scope = nestedScope ?? directScope;
-		scope.setActive(
-			scope
+		directScope.setActive(
+			directScope
 				.tools()
 				.map((candidate: { name: string }) => candidate.name)
-				.filter((name: string) => !deferred.has(name)),
+				.filter((name: string) => !deferredSet.has(name)),
 		);
 	});
 	// Other extensions re-activate deferred tools after session_start (e.g.
@@ -56,20 +52,15 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	// the deferred names so the model knows what select: can load. `sections` is
 	// typed optional because pi 0.84 (the pinned dev dependency) predates it.
 	pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
-		// A nested scope owns its availability; never prune the outer Pi tool set.
-		// Direct sessions still re-assert deferral against other extensions each turn.
-		if (!codeMode.scope()) {
-			const deferred = new Set(deferredTools);
-			const active = pi.getActiveTools();
-			const next = active.filter((name: string) => !deferred.has(name) || activatedBySearch.has(name));
-			if (next.length !== active.length) pi.setActiveTools(next);
-		}
+		const active = pi.getActiveTools();
+		const next = active.filter((name: string) => !deferredSet.has(name) || activatedBySearch.has(name));
+		const changed = next.length !== active.length;
+		if (changed) pi.setActiveTools(next);
 		const sections = (event.systemPromptOptions as { sections?: Record<string, string> }).sections;
 		if (!sections) return;
 		// A tool counts as loaded when it is in pi's active set, whatever activated it
-		// (tool_search direct, codemode nested, user toggles); activatedBySearch only
-		// protects against pruning.
-		const loaded = new Set(pi.getActiveTools());
+		// (tool_search or user toggles); activatedBySearch only protects against pruning.
+		const loaded = new Set(changed ? pi.getActiveTools() : active);
 		const pending = getDeferredNames().filter((name) => !loaded.has(name));
 		const section = renderDeferredSection(pending);
 		if (section === undefined) delete sections[DEFERRED_SECTION_KEY];
@@ -77,6 +68,5 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	});
 	pi.on("session_shutdown", (event: { reason: string }) => {
 		if (event.reason !== "reload" && event.reason !== "quit") return;
-		codeMode.dispose();
 	});
 }
