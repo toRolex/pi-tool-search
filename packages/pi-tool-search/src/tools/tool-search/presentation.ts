@@ -1,7 +1,7 @@
 import type { AgentToolResult, Theme } from "@earendil-works/pi-coding-agent";
 import { ComponentStack, icon } from "@luan.sh/pi-libtui";
 import { settleToolCallPreview, ToolActivity, ToolTranscript, toolCallPreview } from "@luan.sh/pi-libtui/tool";
-import type { ToolSearchDetails } from "./result.ts";
+import type { ToolSearchDetails, ToolSearchInput } from "./result.ts";
 
 interface PresentationContext {
 	readonly executionStarted: boolean;
@@ -53,20 +53,35 @@ export function renderToolSearchResult(
 	}
 	const failed = context.isError;
 	const noMatch = details.status === "no_match";
-	const verb = failed ? "Tool search failed" : noMatch ? "No tools found" : "Loaded tools";
+	const invalidSelect = details.status === "invalid_select";
+	const verb = failed
+		? "Tool search failed"
+		: invalidSelect
+			? "Invalid select"
+			: noMatch
+				? "No tools found"
+				: "Loaded tools";
 	const rows = details.rankedMatches.map((match) => `${match.name}  ${match.description}`);
 	const view = {
 		action: {
 			verb,
 			detail: details.input.query,
-			status: failed ? ("failed" as const) : noMatch ? ("warning" as const) : ("succeeded" as const),
+			status: failed
+				? ("failed" as const)
+				: invalidSelect || noMatch
+					? ("warning" as const)
+					: ("succeeded" as const),
 			marker: icon("search"),
 			meta: [`${details.counts.matches} matches`, formatDuration(details.timing.durationMs)],
 		},
 		running: false,
 		payload: rows.length
 			? { kind: "text" as const, text: rows.join("\n"), revision: details.activation.after.length + rows.length }
-			: undefined,
+			: invalidSelect
+				// Derived from details, not result.content: the Code Mode adapter forwards
+				// an empty content array, so the diagnostics must come from the input.
+				? { kind: "text" as const, text: invalidSelectText(details.input), revision: details.activation.after.length }
+				: undefined,
 		mode: expanded ? ("full" as const) : ("preview" as const),
 	};
 	return ToolActivity.reuse(context.lastComponent, {
@@ -77,25 +92,57 @@ export function renderToolSearchResult(
 	});
 }
 
-function isToolSearchDetails(details: ToolSearchDetails | undefined): details is ToolSearchDetails {
+function isToolSearchDetails(details: unknown): details is ToolSearchDetails {
 	if (!details || typeof details !== "object") return false;
-	return (
-		details.version === 2 &&
-		details.tool === "tool_search" &&
-		(details.status === "loaded" || details.status === "no_match") &&
-		typeof details.input?.query === "string" &&
-		Array.isArray(details.rankedMatches) &&
-		details.rankedMatches.every(
+	const candidate = details as {
+		version?: unknown;
+		tool?: unknown;
+		status?: unknown;
+		input?: { mode?: unknown; query?: unknown; requested?: unknown; unknown?: unknown; alreadyActive?: unknown };
+		rankedMatches?: unknown;
+		activation?: { after?: unknown };
+		counts?: { matches?: unknown };
+		timing?: { durationMs?: unknown };
+	};
+	if (candidate.tool !== "tool_search") return false;
+	if (!Array.isArray(candidate.rankedMatches)) return false;
+	if (
+		!candidate.rankedMatches.every(
 			(match) =>
 				match !== null &&
 				typeof match === "object" &&
 				typeof match.name === "string" &&
 				typeof match.description === "string",
-		) &&
-		Array.isArray(details.activation?.after) &&
-		Number.isFinite(details.counts?.matches) &&
-		Number.isFinite(details.timing?.durationMs)
-	);
+		)
+	)
+		return false;
+	if (!Array.isArray(candidate.activation?.after)) return false;
+	if (!Number.isFinite(candidate.counts?.matches)) return false;
+	if (!Number.isFinite(candidate.timing?.durationMs)) return false;
+	if (candidate.version === 2) {
+		return (
+			(candidate.status === "loaded" || candidate.status === "no_match") &&
+			typeof candidate.input?.query === "string"
+		);
+	}
+	if (candidate.version !== 3) return false;
+	if (candidate.status !== "loaded" && candidate.status !== "no_match" && candidate.status !== "invalid_select") return false;
+	const input = candidate.input;
+	if (input?.mode === "search") return typeof input.query === "string";
+	if (input?.mode === "select") {
+		return (
+			typeof input.query === "string" &&
+			Array.isArray(input.requested) &&
+			Array.isArray(input.unknown) &&
+			Array.isArray(input.alreadyActive)
+		);
+	}
+	return false;
+}
+
+function invalidSelectText(input: ToolSearchInput): string {
+	if (input.mode !== "select" || input.unknown.length === 0) return 'No tool names after "select:".';
+	return `Unknown or non-deferred tools in select query: ${input.unknown.join(", ")}. No tools were activated.`;
 }
 
 function resultText(result: AgentToolResult<ToolSearchDetails>): string {

@@ -21,6 +21,7 @@ export interface ToolSearchCodeModeBridge {
 
 export function registerToolSearchCodeModeAdapter(
 	tool: ReturnType<typeof createToolSearchTool>,
+	getDeferredNames?: () => readonly string[],
 ): ToolSearchCodeModeBridge {
 	let scope: CodeModeToolScope | undefined;
 	const adapter: CodeModeToolAdapter = {
@@ -48,7 +49,7 @@ export function registerToolSearchCodeModeAdapter(
 		},
 		invoke(input: OpaqueToolInput) {
 			if (!scope) throw new Error("tool_search has no active Code Mode scope");
-			return executeToolSearch(input as { query: string; limit?: number }, scope) as Promise<
+			return executeToolSearch(input as { query: string; limit?: number }, scope, getDeferredNames) as Promise<
 				AgentToolResult<OpaqueToolDetails>
 			>;
 		},

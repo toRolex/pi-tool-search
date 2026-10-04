@@ -3,8 +3,9 @@ import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { configureTuiAppearance, DEFAULT_TUI_APPEARANCE, icon } from "@luan.sh/pi-libtui";
 import toolSearchExtension from "../src/extension.ts";
 import { searchTools, type ToolMetadata } from "../src/search.ts";
-import { createToolSearchTool, TOOL_SEARCH_NAME } from "../src/tools/tool-search/definition.ts";
+import { createToolSearchTool, executeToolSearch, TOOL_SEARCH_NAME } from "../src/tools/tool-search/definition.ts";
 import { renderToolSearchResult } from "../src/tools/tool-search/presentation.ts";
+import { DEFERRED_SECTION_KEY, parseSelectQuery, renderDeferredSection } from "../src/tools/tool-search/select.ts";
 
 const SETTINGS_KEY = Symbol.for("pi-xsettings/registry/v1");
 const ADAPTERS_KEY = Symbol.for("pi-code-mode/nested-tool-adapters/v2");
@@ -92,6 +93,229 @@ describe("ranking", () => {
 	});
 });
 
+describe("select query parsing", () => {
+	test("detects the select prefix after leading whitespace", () => {
+		expect(parseSelectQuery("  select:read")).toEqual({ requested: ["read"] });
+	});
+
+	test("returns undefined without the prefix", () => {
+		expect(parseSelectQuery("weather")).toBeUndefined();
+		expect(parseSelectQuery("select")).toBeUndefined();
+		expect(parseSelectQuery("preselect:read")).toBeUndefined();
+	});
+
+	test("trims segments, drops empties, and dedupes preserving first occurrence", () => {
+		expect(parseSelectQuery("select: read , , read ,write_stdin ,, ")).toEqual({
+			requested: ["read", "write_stdin"],
+		});
+	});
+
+	test("keeps a bare select query as an empty request", () => {
+		expect(parseSelectQuery("select:")).toEqual({ requested: [] });
+		expect(parseSelectQuery("select: , ,")).toEqual({ requested: [] });
+	});
+});
+
+describe("deferred tool section", () => {
+	test("renders nothing when no tools are pending", () => {
+		expect(renderDeferredSection([])).toBeUndefined();
+	});
+
+	test("lists pending names and shows a two-name select example", () => {
+		expect(renderDeferredSection(["read", "write_stdin", "exec_command"])).toBe(
+			'These tools are available but their schemas are not loaded: read, write_stdin, exec_command.\n' +
+				'Use tool_search with query "select:<name>" (e.g. "select:read,write_stdin") to load tool schemas before calling them.',
+		);
+	});
+
+	test("shows a single-name example when only one tool is pending", () => {
+		expect(renderDeferredSection(["read"])).toBe(
+			'These tools are available but their schemas are not loaded: read.\n' +
+				'Use tool_search with query "select:<name>" (e.g. "select:read") to load tool schemas before calling them.',
+		);
+	});
+});
+
+describe("select loading", () => {
+	test("activates exactly the requested deferred tools", async () => {
+		const active = [TOOL_SEARCH_NAME, "read"];
+		const { scope, updates } = toolApi(
+			[
+				metadata(TOOL_SEARCH_NAME, "Search tools."),
+				metadata("read", "Read a file."),
+				metadata("write_stdin", "Continue a command."),
+				metadata("exec_command", "Run a shell command."),
+			],
+			active,
+		);
+
+		const result = await executeToolSearch(
+			{ query: "select:write_stdin,exec_command" },
+			scope("write_stdin", "exec_command"),
+			() => ["write_stdin", "exec_command"],
+		);
+
+		expect(updates).toEqual([[TOOL_SEARCH_NAME, "read", "write_stdin", "exec_command"]]);
+		expect(result.details).toMatchObject({
+			version: 3,
+			status: "loaded",
+			input: {
+				mode: "select",
+				query: "select:write_stdin,exec_command",
+				requested: ["write_stdin", "exec_command"],
+				unknown: [],
+				alreadyActive: [],
+			},
+			rankedMatches: [
+				{ name: "write_stdin", score: 1 },
+				{ name: "exec_command", score: 1 },
+			],
+			activation: {
+				before: [TOOL_SEARCH_NAME, "read"],
+				added: ["write_stdin", "exec_command"],
+				after: [TOOL_SEARCH_NAME, "read", "write_stdin", "exec_command"],
+			},
+			counts: { matches: 2, added: 2 },
+		});
+		expect(result.content).toEqual([{ type: "text", text: "Loaded tools: write_stdin, exec_command." }]);
+	});
+
+	test("ignores the limit on the select path", async () => {
+		const active = [TOOL_SEARCH_NAME];
+		const { scope, updates } = toolApi(
+			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read."), metadata("write_stdin", "Continue.")],
+			active,
+		);
+
+		const result = await executeToolSearch(
+			{ query: "select:read,write_stdin", limit: 1 },
+			scope("read", "write_stdin"),
+			() => ["read", "write_stdin"],
+		);
+
+		expect(updates).toEqual([[TOOL_SEARCH_NAME, "read", "write_stdin"]]);
+		expect(result.details.activation.added).toEqual(["read", "write_stdin"]);
+	});
+
+	test("activates nothing when any requested name is unknown", async () => {
+		const active = [TOOL_SEARCH_NAME];
+		const { scope, updates } = toolApi(
+			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read a file."), metadata("write_stdin", "Continue.")],
+			active,
+		);
+
+		const result = await executeToolSearch(
+			{ query: "select:read,missing" },
+			scope("read", "write_stdin"),
+			() => ["read", "write_stdin"],
+		);
+
+		expect(updates).toEqual([]);
+		expect(result.details).toMatchObject({
+			version: 3,
+			status: "invalid_select",
+			input: { mode: "select", requested: ["read", "missing"], unknown: ["missing"], alreadyActive: [] },
+			rankedMatches: [],
+			activation: { added: [], after: [TOOL_SEARCH_NAME] },
+		});
+		expect(result.content).toEqual([
+			{ type: "text", text: "Unknown or non-deferred tools in select query: missing. No tools were activated." },
+		]);
+	});
+
+	test("rejects a registered name outside the deferred list", async () => {
+		const active = [TOOL_SEARCH_NAME];
+		const { scope, updates } = toolApi(
+			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read."), metadata("disabled_weather", "Weather.")],
+			active,
+		);
+
+		const result = await executeToolSearch(
+			{ query: "select:disabled_weather" },
+			scope("disabled_weather"),
+			() => ["read"],
+		);
+
+		expect(updates).toEqual([]);
+		expect(result.details).toMatchObject({
+			status: "invalid_select",
+			input: { mode: "select", requested: ["disabled_weather"], unknown: ["disabled_weather"] },
+		});
+	});
+
+	test("reports already-active names alongside the newly added ones", async () => {
+		const active = [TOOL_SEARCH_NAME, "read"];
+		const { scope, updates } = toolApi(
+			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read."), metadata("write_stdin", "Continue.")],
+			active,
+		);
+
+		const result = await executeToolSearch(
+			{ query: "select:read,write_stdin" },
+			scope("read", "write_stdin"),
+			() => ["read", "write_stdin"],
+		);
+
+		expect(updates).toEqual([[TOOL_SEARCH_NAME, "read", "write_stdin"]]);
+		expect(result.details).toMatchObject({
+			status: "loaded",
+			input: { mode: "select", requested: ["read", "write_stdin"], unknown: [], alreadyActive: ["read"] },
+			activation: { added: ["write_stdin"] },
+		});
+		expect(result.content).toEqual([
+			{ type: "text", text: "Loaded tools: write_stdin. Already active: read." },
+		]);
+	});
+
+	test("does not reactivate only-active tools", async () => {
+		const active = [TOOL_SEARCH_NAME, "read"];
+		const { scope, updates } = toolApi(
+			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read.")],
+			active,
+		);
+
+		const result = await executeToolSearch({ query: "select:read" }, scope("read"), () => ["read"]);
+
+		expect(updates).toEqual([]);
+		expect(result.details).toMatchObject({
+			status: "loaded",
+			input: { mode: "select", requested: ["read"], unknown: [], alreadyActive: ["read"] },
+			activation: { added: [] },
+		});
+		expect(result.content).toEqual([{ type: "text", text: "Tools already active: read." }]);
+	});
+
+	test("treats a bare select as invalid", async () => {
+		const active = [TOOL_SEARCH_NAME];
+		const { scope, updates } = toolApi([metadata(TOOL_SEARCH_NAME, "Search tools.")], active);
+
+		const result = await executeToolSearch({ query: "select:" }, scope(), () => []);
+
+		expect(updates).toEqual([]);
+		expect(result.details).toMatchObject({
+			status: "invalid_select",
+			input: { mode: "select", requested: [], unknown: [], alreadyActive: [] },
+		});
+		expect(result.content).toEqual([{ type: "text", text: 'No tool names after "select:".' }]);
+	});
+
+	test("treats every name as unknown without a deferred list", async () => {
+		const active = [TOOL_SEARCH_NAME];
+		const { scope, updates } = toolApi(
+			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read.")],
+			active,
+		);
+
+		const result = await executeToolSearch({ query: "select:read" }, scope("read"));
+
+		expect(updates).toEqual([]);
+		expect(result.details).toMatchObject({
+			status: "invalid_select",
+			input: { mode: "select", requested: ["read"], unknown: ["read"] },
+		});
+	});
+});
+
 describe("dynamic loading", () => {
 	test("registers tool_search as a normal Pi tool", () => {
 		const registered: unknown[] = [];
@@ -119,7 +343,7 @@ describe("dynamic loading", () => {
 
 		toolSearchExtension(pi);
 
-		expect(handlers).toEqual(["session_start", "session_shutdown"]);
+		expect(handlers).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
 	});
 
 	test("defers only configured active tools and excludes disabled tools from its chooser", async () => {
@@ -260,7 +484,7 @@ describe("dynamic loading", () => {
 
 		expect(updates).toEqual([[TOOL_SEARCH_NAME, "read", "weather_lookup", "weather_history"]]);
 		expect(result.details).toMatchObject({
-			version: 2,
+			version: 3,
 			tool: "tool_search",
 			status: "loaded",
 			input: { query: "weather", normalizedQuery: "weather", limit: 8 },
@@ -311,7 +535,7 @@ describe("dynamic loading", () => {
 
 		expect(updates).toEqual([]);
 		expect(result.details).toMatchObject({
-			version: 2,
+			version: 3,
 			tool: "tool_search",
 			status: "no_match",
 			input: { query: "weather", normalizedQuery: "weather", limit: 8 },
@@ -423,5 +647,157 @@ describe("dynamic loading", () => {
 			false,
 		);
 		expect(Bun.stripANSI(component.render(80).join("\n"))).toBe(`${icon("search")} Tool search failed · weather ›`);
+	});
+
+	test("renders a valid persisted v2 result through the back-compat guard", () => {
+		const component = renderToolSearchResult(
+			{
+				content: [{ type: "text", text: "Loaded tools: weather." }],
+				details: {
+					version: 2,
+					tool: "tool_search",
+					status: "loaded",
+					input: { query: "weather", normalizedQuery: "weather", limit: 8 },
+					rankedMatches: [{ name: "weather", description: "Weather data.", score: 1 }],
+					activation: { before: [TOOL_SEARCH_NAME], added: ["weather"], after: [TOOL_SEARCH_NAME, "weather"] },
+					counts: { registered: 2, searchable: 1, matches: 1, added: 1 },
+					timing: { durationMs: 5 },
+				} as never,
+			},
+			presentationTheme,
+			{
+				args: { query: "weather" },
+				executionStarted: true,
+				invalidate() {},
+				isError: false,
+				lastComponent: undefined,
+			},
+			false,
+		);
+		const rendered = Bun.stripANSI(component.render(80).join("\n"));
+		expect(rendered).toContain("Loaded tools");
+		expect(rendered).not.toContain("Tool search failed");
+	});
+
+	test("renders invalid select details with the unknown names", () => {
+		const component = renderToolSearchResult(
+			{
+				content: [
+					{
+						type: "text",
+						text: "Unknown or non-deferred tools in select query: missing. No tools were activated.",
+					},
+				],
+				details: {
+					version: 3,
+					tool: "tool_search",
+					status: "invalid_select",
+					input: { mode: "select", query: "select:missing", requested: ["missing"], unknown: ["missing"], alreadyActive: [] },
+					rankedMatches: [],
+					activation: { before: [TOOL_SEARCH_NAME], added: [], after: [TOOL_SEARCH_NAME] },
+					counts: { registered: 1, searchable: 1, matches: 0, added: 0 },
+					timing: { durationMs: 2 },
+				},
+			},
+			presentationTheme,
+			{
+				args: { query: "select:missing" },
+				executionStarted: true,
+				invalidate() {},
+				isError: false,
+				lastComponent: undefined,
+			},
+			false,
+		);
+		const rendered = Bun.stripANSI(component.render(80).join("\n"));
+		expect(rendered).toContain("Invalid select");
+		expect(rendered).toContain("Unknown or non-deferred tools");
+	});
+
+	test("derives invalid select diagnostics from details when content is empty", () => {
+		const component = renderToolSearchResult(
+			{
+				content: [],
+				details: {
+					version: 3,
+					tool: "tool_search",
+					status: "invalid_select",
+					input: { mode: "select", query: "select:missing", requested: ["missing"], unknown: ["missing"], alreadyActive: [] },
+					rankedMatches: [],
+					activation: { before: [TOOL_SEARCH_NAME], added: [], after: [TOOL_SEARCH_NAME] },
+					counts: { registered: 1, searchable: 1, matches: 0, added: 0 },
+					timing: { durationMs: 2 },
+				},
+			},
+			presentationTheme,
+			{
+				args: { query: "select:missing" },
+				executionStarted: true,
+				invalidate() {},
+				isError: false,
+				lastComponent: undefined,
+			},
+			false,
+		);
+		const rendered = Bun.stripANSI(component.render(80).join("\n"));
+		expect(rendered).toContain("Unknown or non-deferred tools in select query: missing");
+	});
+
+	test("publishes deferred names as a system-prompt section each turn", async () => {
+		type PromptEvent = { systemPromptOptions: { sections: Record<string, string> } };
+		const handlers = new Map<string, Array<(event?: PromptEvent) => void | Promise<void>>>();
+		Reflect.set(globalThis, SETTINGS_KEY, {
+			protocol: "pi-xsettings/registry/v1",
+			version: 1,
+			registrations: {},
+			values: {},
+			listeners: [],
+			register(registration: {
+				onValues?: (values: Record<string, string[]>) => void;
+			}) {
+				registration.onValues?.({ tools: ["deferred_weather"] });
+				return () => undefined;
+			},
+			async publish() {},
+			onRegister() {
+				return () => undefined;
+			},
+		});
+		const active = [TOOL_SEARCH_NAME, "deferred_weather"];
+		const tools = [metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("deferred_weather", "Weather data.")];
+		let registeredTool: { execute: (id: string, parameters: { query: string }) => Promise<unknown> } | undefined;
+		const pi = {
+			registerTool(tool: typeof registeredTool) {
+				registeredTool = tool;
+			},
+			getAllTools: () => tools,
+			getActiveTools: () => [...active],
+			setActiveTools: (names: string[]) => active.splice(0, active.length, ...names),
+			on(event: string, handler: (event?: PromptEvent) => void | Promise<void>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+		} as unknown as ExtensionAPI;
+
+		toolSearchExtension(pi);
+		for (const handler of handlers.get("session_start") ?? []) await handler();
+
+		const sections: Record<string, string> = {};
+		for (const handler of handlers.get("before_agent_start") ?? []) await handler({ systemPromptOptions: { sections } });
+
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		expect(sections[DEFERRED_SECTION_KEY]).toBe(
+			'These tools are available but their schemas are not loaded: deferred_weather.\n' +
+				'Use tool_search with query "select:<name>" (e.g. "select:deferred_weather") to load tool schemas before calling them.',
+		);
+
+		// Loading via tool_search (the only path that survives pruning) removes the
+		// name from the advertised section on the next turn.
+		await registeredTool!.execute("tool_1", { query: "select:deferred_weather" });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "deferred_weather"]);
+		for (const handler of handlers.get("before_agent_start") ?? []) {
+			await handler({ systemPromptOptions: { sections } });
+		}
+		expect(active).toEqual([TOOL_SEARCH_NAME, "deferred_weather"]);
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
 	});
 });

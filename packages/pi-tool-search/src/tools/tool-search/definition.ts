@@ -2,6 +2,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { MAX_RESULTS, searchTools, type ToolMetadata } from "../../search.ts";
 import { renderToolSearchCall, renderToolSearchResult } from "./presentation.ts";
 import { createToolSearchResult, type ToolSearchDetails } from "./result.ts";
+import { parseSelectQuery } from "./select.ts";
 
 export const TOOL_SEARCH_NAME = "tool_search";
 
@@ -31,11 +32,12 @@ export interface ToolSearchScope {
 
 export function createToolSearchTool(
 	scope: ToolSearchScope,
+	getDeferredNames?: () => readonly string[],
 ): ToolDefinition<typeof TOOL_SEARCH_PARAMETERS, ToolSearchDetails> {
 	return {
 		name: TOOL_SEARCH_NAME,
 		label: "Tool Search",
-		description: `Search the inactive tools in this Pi session when the task needs a capability that is not active. Matches and loads at most ${MAX_RESULTS} tools.`,
+		description: `Search the inactive tools in this Pi session when the task needs a capability that is not active. Matches and loads at most ${MAX_RESULTS} tools. Prefix query with "select:<name>,<name>" to load exact tools by name.`,
 		parameters: TOOL_SEARCH_PARAMETERS,
 		executionMode: "sequential",
 		renderShell: "self",
@@ -46,7 +48,7 @@ export function createToolSearchTool(
 			return renderToolSearchResult(result, theme, context, options.expanded);
 		},
 		async execute(_toolCallId, parameters) {
-			return executeToolSearch(parameters, scope);
+			return executeToolSearch(parameters, scope, getDeferredNames);
 		},
 	};
 }
@@ -54,6 +56,7 @@ export function createToolSearchTool(
 export async function executeToolSearch(
 	parameters: { query: string; limit?: number },
 	scope: ToolSearchScope,
+	getDeferredNames?: () => readonly string[],
 ): Promise<ReturnType<typeof createToolSearchResult>> {
 	const startedAt = performance.now();
 	const activeTools = [...scope.active()];
@@ -61,6 +64,29 @@ export async function executeToolSearch(
 	const allTools = [...scope.tools()];
 	const searchableTools = allTools.filter((tool) => !activeNames.has(tool.name));
 	const limit = Math.min(MAX_RESULTS, Math.max(1, Math.floor(parameters.limit ?? MAX_RESULTS) || MAX_RESULTS));
+
+	const select = parseSelectQuery(parameters.query);
+	if (select) {
+		const deferredNames = new Set(getDeferredNames?.() ?? []);
+		const allToolNames = new Set(allTools.map((tool) => tool.name));
+		const unknown = select.requested.filter((name) => !allToolNames.has(name) || !deferredNames.has(name));
+		const alreadyActive = select.requested.filter((name) => !unknown.includes(name) && activeNames.has(name));
+		const toActivate = select.requested.filter((name) => !unknown.includes(name) && !activeNames.has(name));
+		const added = unknown.length > 0 ? [] : toActivate;
+		if (added.length > 0) scope.setActive([...activeTools, ...added]);
+		return createToolSearchResult({
+			query: parameters.query,
+			limit,
+			matches: added.map((name) => ({ tool: allTools.find((tool) => tool.name === name)!, score: 1 })),
+			activeBefore: activeTools,
+			added,
+			registeredCount: allTools.length,
+			searchableCount: searchableTools.length,
+			durationMs: performance.now() - startedAt,
+			select: { requested: select.requested, unknown, alreadyActive },
+		});
+	}
+
 	const matches = searchTools(parameters.query, searchableTools, limit);
 
 	if (matches.length === 0) {

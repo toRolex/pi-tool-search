@@ -1,7 +1,8 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerToolSearchCodeModeAdapter } from "./code-mode-adapter.ts";
 import { createToolSearchSettings, type ToolSearchSettings } from "./contributions/xsettings.ts";
 import { createToolSearchTool } from "./tools/tool-search/definition.ts";
+import { DEFERRED_SECTION_KEY, renderDeferredSection } from "./tools/tool-search/select.ts";
 
 export default function toolSearchExtension(pi: ExtensionAPI): void {
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
@@ -18,10 +19,14 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 			pi.setActiveTools([...pi.getActiveTools().filter((name: string) => !assigned.has(name)), ...names]);
 		},
 	};
-	const tool = createToolSearchTool(directScope);
-	pi.registerTool(tool);
-	const codeMode = registerToolSearchCodeModeAdapter(tool);
 	let deferredTools: string[] = [];
+	const getDeferredNames = () => {
+		const registered = new Set(pi.getAllTools().map((candidate: { name: string }) => candidate.name));
+		return deferredTools.filter((name) => registered.has(name));
+	};
+	const tool = createToolSearchTool(directScope, getDeferredNames);
+	pi.registerTool(tool);
+	const codeMode = registerToolSearchCodeModeAdapter(tool, getDeferredNames);
 	let settingsClient = createToolSearchSettings();
 	let unregisterXSettings = settingsClient.register((settings) => {
 		deferredTools = [...settings.tools];
@@ -33,7 +38,7 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 		directTools = pi.getAllTools().filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
 		const assignedTools = nestedScope?.tools() ?? directTools;
 		const options = assignedTools
-			.map((candidate: { name: string; description?: string }) => ({ name: candidate.name, description: candidate.description }))
+			.map((candidate: { name: string; description: string }) => ({ name: candidate.name, description: candidate.description }))
 			.sort((left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name));
 		unregisterXSettings();
 		settingsClient = createToolSearchSettings(options);
@@ -53,13 +58,24 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 	// pi-goal-x installs its tool profile on every before_agent_start), so the
 	// defer decision is re-asserted each turn. Tools activated via tool_search
 	// stay active for the session. Only deferred names are touched; the rest of
-	// the active set (user toggles) is preserved as-is.
-	pi.on("before_agent_start", () => {
-		if (deferredTools.length === 0) return;
+	// the active set (user toggles) is preserved as-is. The same hook advertises
+	// the deferred names so the model knows what select: can load. `sections` is
+	// typed optional because pi 0.84 (the pinned dev dependency) predates it.
+	pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
 		const deferred = new Set(deferredTools);
 		const active = pi.getActiveTools();
 		const next = active.filter((name: string) => !deferred.has(name) || activatedBySearch.has(name));
 		if (next.length !== active.length) pi.setActiveTools(next);
+		const sections = (event.systemPromptOptions as { sections?: Record<string, string> }).sections;
+		if (!sections) return;
+		// A tool counts as loaded when it is in pi's active set, whatever activated it
+		// (tool_search direct, codemode nested, user toggles); activatedBySearch only
+		// protects against pruning.
+		const loaded = new Set(pi.getActiveTools());
+		const pending = getDeferredNames().filter((name) => !loaded.has(name));
+		const section = renderDeferredSection(pending);
+		if (section === undefined) delete sections[DEFERRED_SECTION_KEY];
+		else sections[DEFERRED_SECTION_KEY] = section;
 	});
 	pi.on("session_shutdown", (event: { reason: string }) => {
 		if (event.reason !== "reload" && event.reason !== "quit") return;
