@@ -30,7 +30,8 @@
   "dependencies": {
     "@luan.sh/pi-code-mode": "file:../pi-code-mode",
     "@luan.sh/pi-libtui": "file:../pi-libtui",
-    "@luan.sh/pi-xsettings": "file:../pi-xsettings"
+    "@luan.sh/pi-xsettings": "file:../pi-xsettings",
+    "smol-toml": "^1.4.2"
   },
   "bundledDependencies": [
     "@luan.sh/pi-code-mode",

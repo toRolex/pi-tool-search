@@ -11,8 +11,14 @@
   "pi": {
     "extensions": [
       "./packages/pi-tool-search/src/extension.ts",
-      "./packages/pi-xsettings/src/extension.ts",
       "./packages/pi-xsettings/node_modules/@luan.sh/pi-libtui/src/extension.ts"
     ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2",
+    "@types/bun": "^1.3.0",
+    "smol-toml": "^1.4.2",
+    "typescript": "^6.0.3"
   }
 }

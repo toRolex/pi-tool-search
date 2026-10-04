@@ -1,10 +1,15 @@
 import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { readDeferredTools } from "./config.ts";
 import { registerToolSearchCodeModeAdapter } from "./code-mode-adapter.ts";
-import { createToolSearchSettings, type ToolSearchSettings } from "./contributions/xsettings.ts";
 import { createToolSearchTool } from "./tools/tool-search/definition.ts";
 import { DEFERRED_SECTION_KEY, renderDeferredSection } from "./tools/tool-search/select.ts";
 
 export default function toolSearchExtension(pi: ExtensionAPI): void {
+	createToolSearchExtension(pi, `${process.env.HOME}/.pi/agent/tool-search.toml`);
+}
+
+export function createToolSearchExtension(pi: ExtensionAPI, configPath: string): void {
+	const deferredTools = readDeferredTools(configPath);
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
 	const activatedBySearch = new Set<string>();
 	const directScope = {
@@ -19,7 +24,7 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 			pi.setActiveTools([...pi.getActiveTools().filter((name: string) => !assigned.has(name)), ...names]);
 		},
 	};
-	let deferredTools: string[] = [];
+
 	const getDeferredNames = () => {
 		const registered = new Set(pi.getAllTools().map((candidate: { name: string }) => candidate.name));
 		return deferredTools.filter((name) => registered.has(name));
@@ -27,24 +32,11 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 	const tool = createToolSearchTool(directScope, getDeferredNames);
 	pi.registerTool(tool);
 	const codeMode = registerToolSearchCodeModeAdapter(tool, getDeferredNames);
-	let settingsClient = createToolSearchSettings();
-	let unregisterXSettings = settingsClient.register((settings) => {
-		deferredTools = [...settings.tools];
-	});
 	pi.on("session_start", () => {
 		const nestedScope = codeMode.scope();
 		const activeTools = pi.getActiveTools();
 		const active = new Set(activeTools);
 		directTools = pi.getAllTools().filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
-		const assignedTools = nestedScope?.tools() ?? directTools;
-		const options = assignedTools
-			.map((candidate: { name: string; description: string }) => ({ name: candidate.name, description: candidate.description }))
-			.sort((left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name));
-		unregisterXSettings();
-		settingsClient = createToolSearchSettings(options);
-		unregisterXSettings = settingsClient.register((settings: ToolSearchSettings) => {
-			deferredTools = [...settings.tools];
-		});
 		const deferred = new Set(deferredTools);
 		const scope = nestedScope ?? directScope;
 		scope.setActive(
@@ -79,7 +71,6 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 	});
 	pi.on("session_shutdown", (event: { reason: string }) => {
 		if (event.reason !== "reload" && event.reason !== "quit") return;
-		unregisterXSettings();
 		codeMode.dispose();
 	});
 }

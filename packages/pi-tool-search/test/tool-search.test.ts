@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { createToolSearchExtension } from "../src/extension.ts";
+import { parseDeferredTools, readDeferredTools } from "../src/config.ts";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { configureTuiAppearance, DEFAULT_TUI_APPEARANCE, icon } from "@luan.sh/pi-libtui";
 import toolSearchExtension from "../src/extension.ts";
@@ -10,7 +15,17 @@ import { DEFERRED_SECTION_KEY, parseSelectQuery, renderDeferredSection } from ".
 const SETTINGS_KEY = Symbol.for("pi-xsettings/registry/v1");
 const ADAPTERS_KEY = Symbol.for("pi-code-mode/nested-tool-adapters/v2");
 
+let configDir = mkdtempSync(join(tmpdir(), "tool-search-test-"));
+let configPath = join(configDir, "tool-search.toml");
+
+function configure(names: string[]) {
+	writeFileSync(configPath, `[tools]\ndeferred = [${names.map((name) => JSON.stringify(name)).join(", ")}]`);
+}
+
 afterEach(() => {
+	rmSync(configDir, { recursive: true, force: true });
+	configDir = mkdtempSync(join(tmpdir(), "tool-search-test-"));
+	configPath = join(configDir, "tool-search.toml");
 	Reflect.deleteProperty(globalThis, SETTINGS_KEY);
 	Reflect.deleteProperty(globalThis, ADAPTERS_KEY);
 	configureTuiAppearance(DEFAULT_TUI_APPEARANCE);
@@ -67,6 +82,24 @@ function toolApi(tools: ToolMetadata[], active: string[]) {
 		updates,
 	};
 }
+
+describe("deferred config", () => {
+	test("parses string arrays and ignores non-string entries, empty strings, and duplicates", () => {
+		expect(parseDeferredTools('[tools]\ndeferred = [\n # comment\n "read", \'write\', 1, "", "read",\n]')).toEqual(["read", "write"]);
+	});
+	test("returns empty for missing key and rejects malformed TOML", () => {
+		expect(parseDeferredTools("[tools]")).toEqual([]);
+		expect(parseDeferredTools("")).toEqual([]);
+		expect(() => parseDeferredTools('[tools]\ndeferred = "read"')).toThrow(TypeError);
+		expect(() => parseDeferredTools("[tools\ndeferred = [")).toThrow();
+	});
+	test("reads missing files as empty but propagates other filesystem and parse errors", () => {
+		expect(readDeferredTools(configPath)).toEqual([]);
+		expect(() => readDeferredTools(configDir)).toThrow();
+		writeFileSync(configPath, "[tools\ndeferred = [");
+		expect(() => readDeferredTools(configPath)).toThrow();
+	});
+});
 
 describe("ranking", () => {
 	test("ranks name matches above description matches", () => {
@@ -319,12 +352,13 @@ describe("select loading", () => {
 describe("dynamic loading", () => {
 	test("registers tool_search as a normal Pi tool", () => {
 		const registered: unknown[] = [];
-		toolSearchExtension({
+		expect(toolSearchExtension.length).toBe(1);
+		createToolSearchExtension({
 			registerTool: (tool: unknown) => {
 				registered.push(tool);
 			},
 			on() {},
-		} as unknown as ExtensionAPI);
+		} as unknown as ExtensionAPI, configPath);
 
 		expect(registered).toHaveLength(1);
 		expect(registered[0]).toMatchObject({ name: TOOL_SEARCH_NAME });
@@ -341,32 +375,28 @@ describe("dynamic loading", () => {
 			},
 		} as unknown as ExtensionAPI;
 
-		toolSearchExtension(pi);
+		createToolSearchExtension(pi, configPath);
 
 		expect(handlers).toEqual(["session_start", "before_agent_start", "session_shutdown"]);
 	});
 
-	test("defers only configured active tools and excludes disabled tools from its chooser", async () => {
+	test("defers only configured active tools without registering xsettings options", async () => {
 		const active = [TOOL_SEARCH_NAME, "deferred_weather", "direct_issues"];
 		const handlers = new Map<string, Array<() => void | Promise<void>>>();
-		let latestDefinitions: Array<Record<string, unknown>> = [];
+		let settingsRegistrations = 0;
 		Reflect.set(globalThis, SETTINGS_KEY, {
 			protocol: "pi-xsettings/registry/v1",
 			version: 1,
 			registrations: {},
 			values: {},
 			listeners: [],
-			register(registration: {
-				definitions: Array<Record<string, unknown>>;
-				onValues?: (values: Record<string, string[]>) => void;
-			}) {
-				latestDefinitions = registration.definitions;
-				registration.onValues?.({ tools: ["deferred_weather", "disabled_weather"] });
+			register() {
+				settingsRegistrations++;
 				return () => undefined;
 			},
 			async publish() {},
 			onRegister() {
-				return () => undefined;
+				throw new Error("tool-search must not subscribe to xsettings");
 			},
 		});
 		const tools = [
@@ -385,37 +415,32 @@ describe("dynamic loading", () => {
 			},
 		} as unknown as ExtensionAPI;
 
-		toolSearchExtension(pi);
+		configure(["deferred_weather", "disabled_weather"]);
+		createToolSearchExtension(pi, configPath);
+		// Session startup must use the factory snapshot, not reread the changed file.
+		configure(["direct_issues"]);
 		for (const handler of handlers.get("session_start") ?? []) await handler();
 
 		expect(active).toEqual([TOOL_SEARCH_NAME, "direct_issues"]);
-		const definition = latestDefinitions.find((candidate) => candidate["key"] === "tools");
-		expect(definition?.["options"]).toEqual([
-			{ value: "deferred_weather", label: "deferred_weather", description: "Weather data." },
-			{ value: "direct_issues", label: "direct_issues", description: "Issue data." },
-		]);
+		expect(settingsRegistrations).toBe(0);
 	});
 
 	test("uses sibling Code Mode tools when tool_search is under exec", async () => {
 		const handlers = new Map<string, Array<() => void | Promise<void>>>();
-		let latestDefinitions: Array<Record<string, unknown>> = [];
+		let settingsRegistrations = 0;
 		Reflect.set(globalThis, SETTINGS_KEY, {
 			protocol: "pi-xsettings/registry/v1",
 			version: 1,
 			registrations: {},
 			values: {},
 			listeners: [],
-			register(registration: {
-				definitions: Array<Record<string, unknown>>;
-				onValues?: (values: Record<string, string[]>) => void;
-			}) {
-				latestDefinitions = registration.definitions;
-				registration.onValues?.({ tools: ["exec_command"] });
+			register() {
+				settingsRegistrations++;
 				return () => undefined;
 			},
 			async publish() {},
 			onRegister() {
-				return () => undefined;
+				throw new Error("tool-search must not subscribe to xsettings");
 			},
 		});
 		const activeNested = ["exec_command", "write_stdin"];
@@ -433,7 +458,8 @@ describe("dynamic loading", () => {
 			},
 		} as unknown as ExtensionAPI;
 
-		toolSearchExtension(pi);
+		configure(["exec_command"]);
+		createToolSearchExtension(pi, configPath);
 		const adapter = (
 			Reflect.get(globalThis, ADAPTERS_KEY) as {
 				adapters: Map<
@@ -457,11 +483,7 @@ describe("dynamic loading", () => {
 		for (const handler of handlers.get("session_start") ?? []) await handler();
 
 		expect(activeNested).toEqual(["write_stdin"]);
-		const definition = latestDefinitions.find((candidate) => candidate["key"] === "tools");
-		expect(definition?.["options"]).toEqual([
-			{ value: "exec_command", label: "exec_command", description: "Run a shell command." },
-			{ value: "write_stdin", label: "write_stdin", description: "Continue a command." },
-		]);
+		expect(settingsRegistrations).toBe(0);
 		await adapter.invoke({ query: "shell command" });
 		expect(activeNested).toEqual(["write_stdin", "exec_command"]);
 	});
@@ -778,7 +800,8 @@ describe("dynamic loading", () => {
 			},
 		} as unknown as ExtensionAPI;
 
-		toolSearchExtension(pi);
+		configure(["deferred_weather"]);
+		createToolSearchExtension(pi, configPath);
 		for (const handler of handlers.get("session_start") ?? []) await handler();
 
 		const sections: Record<string, string> = {};

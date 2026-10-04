@@ -21,9 +21,7 @@ builds itself on first use under Pi's agent directory
 (`native/code-mode-host/<version>/`). Set `PI_CODE_MODE_HOST_BINARY` to use a
 prebuilt binary.
 
-Optional companion: `pi install npm:@luan.sh/pi-xsettings` adds the
-`/xsettings` editor for the deferred-tool picker described below; without it
-the default (no deferred tools) applies.
+Deferred tools are configured directly in `~/.pi/agent/tool-search.toml`; no xsettings extension is required.
 
 The package registers no keybindings and no commands. It uses Pi's dynamic
 tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
@@ -69,27 +67,18 @@ active and only the matching tools are added. A no-match query changes
 nothing. Loaded tools stay active for the rest of the session unless another
 owner changes the scope.
 
-## Settings
+## Deferred-tool configuration
 
-Settings live in the `@luan.sh/pi-tool-search` namespace (label "Tool Search",
-category `tools`). Edit them with `/xsettings` when `@luan.sh/pi-xsettings` is
-installed; otherwise the defaults apply.
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `tools` | unordered multi-select | `[]` | Checked tools are hidden until `tool_search` loads them. |
-
-The selection is stored in `~/.pi/agent/xsettings.toml`:
+Create `~/.pi/agent/tool-search.toml`:
 
 ```toml
 [tools]
-pi-tool-search.tools = ["exec_command", "web__run"]
+deferred = ["exec_command", "web__run"]
 ```
 
-The options are rebuilt from the assigned scope at session start and include
-each tool's name and description. Reopen the session after changing the
-selection so the initial deferred set is applied. The setting does not create
-or enable a tool that Pi did not already make available.
+`tools.deferred` is an array of tool-name strings. Missing file or key means no
+configured deferred tools. Invalid TOML is reported as an error. Configuration
+is read once when the extension initializes; changes apply after `/reload`.
 
 ## Use the tool
 

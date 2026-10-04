@@ -28,8 +28,11 @@ export function attachActionShortcuts(
 	}
 	const detachRegistration = registry.onRegister(register);
 	let detachInput: (() => void) | undefined;
-	const detachSession = pi.on("session_start", (_event, ctx) => {
+	let disposed = false;
+	const detachSession: unknown = pi.on("session_start", (_event, ctx) => {
+		if (disposed) return;
 		detachInput?.();
+		detachInput = undefined;
 		if (ctx.mode !== "tui") return;
 		detachInput = ctx.ui.onTerminalInput((data) => {
 			for (const [id, keys] of Object.entries(bindings)) {
@@ -49,8 +52,11 @@ export function attachActionShortcuts(
 		});
 	});
 	return () => {
-		detachSession();
+		disposed = true;
+		// Pi 0.84.2 does not return an unsubscribe function from on().
+		if (typeof detachSession === "function") detachSession();
 		detachRegistration();
 		detachInput?.();
+		detachInput = undefined;
 	};
 }

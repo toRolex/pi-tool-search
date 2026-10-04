@@ -6,12 +6,16 @@ import {
 	createEventBus,
 	createExtensionRuntime,
 	ExtensionRunner,
+	type ExtensionAPI,
 	ModelRegistry,
 	ModelRuntime,
 	SessionManager,
 	type TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
-import { loadExtensionFromFactory } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";
+// Resolve the internal loader beside Pi's public entry, regardless of dependency hoisting.
+const { loadExtensionFromFactory } = await import(
+	new URL("./core/extensions/loader.js", import.meta.resolve("@earendil-works/pi-coding-agent")).href
+);
 import { registerAction } from "@luan.sh/pi-libactions/sdk";
 import { attachActionShortcuts } from "../src/runtime/actions.ts";
 
@@ -43,7 +47,7 @@ test.each([true, false])(
 				});
 			if (registerFirst) unregister = register();
 			const extension = await loadExtensionFromFactory(
-				(pi) => {
+				(pi: ExtensionAPI) => {
 					dispose = attachActionShortcuts(pi, { "test.contextual": ["ctrl+x", "alt+m"] });
 				},
 				directory,
@@ -105,10 +109,12 @@ test.each([true, false])(
 			removeReplacement();
 			expect(input("\x18")).toEqual([undefined]);
 			expect(errors).toEqual([]);
-			dispose();
+			// Pi 0.84.2 on() returns void: cleanup must not throw or reattach on resume.
+			expect(() => dispose()).not.toThrow();
 			expect(inputs.size).toBe(0);
 			await runner.emit({ type: "session_start", reason: "reload" });
 			expect(inputs.size).toBe(0);
+			expect(() => dispose()).not.toThrow();
 		} finally {
 			dispose();
 			unregister();
