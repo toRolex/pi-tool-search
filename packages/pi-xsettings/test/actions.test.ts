@@ -7,6 +7,7 @@ import {
 	createExtensionRuntime,
 	ExtensionRunner,
 	type ExtensionAPI,
+	type ExtensionContext,
 	ModelRegistry,
 	ModelRuntime,
 	SessionManager,
@@ -18,6 +19,67 @@ const { loadExtensionFromFactory } = await import(
 );
 import { registerAction } from "@luan.sh/pi-libactions/sdk";
 import { attachActionShortcuts } from "../src/runtime/actions.ts";
+
+test.each([false, true])(
+	"shortcut cleanup handles on() unsubscribe availability (returns function: %s)",
+	(returnsUnsubscribe) => {
+		let sessionStart!: (event: unknown, ctx: ExtensionContext) => void;
+		let sessionDetachCalls = 0;
+		let inputDetachCalls = 0;
+		let shortcutRegistrations = 0;
+		const inputs = new Set<TerminalInputHandler>();
+		const pi = {
+			registerShortcut() {
+				shortcutRegistrations++;
+			},
+			on(_event: string, handler: typeof sessionStart) {
+				sessionStart = handler;
+				if (returnsUnsubscribe) {
+					return () => {
+						sessionDetachCalls++;
+					};
+				}
+				return undefined;
+			},
+		} as unknown as Pick<ExtensionAPI, "registerShortcut" | "on">;
+		const ctx = {
+			mode: "tui",
+			ui: {
+				onTerminalInput(handler: TerminalInputHandler) {
+					inputs.add(handler);
+					return () => {
+						inputDetachCalls++;
+						inputs.delete(handler);
+					};
+				},
+			},
+		} as unknown as ExtensionContext;
+		const id = `test.cleanup.${returnsUnsubscribe}`;
+		const dispose = attachActionShortcuts(pi, { [id]: ["ctrl+x"] });
+		let unregister = () => {};
+		try {
+			sessionStart({}, ctx);
+			expect(inputs.size).toBe(1);
+			sessionStart({}, ctx);
+			expect(inputs.size).toBe(1);
+			expect(inputDetachCalls).toBe(1);
+			expect(() => dispose()).not.toThrow();
+			expect(inputs.size).toBe(0);
+			expect(inputDetachCalls).toBe(2);
+			expect(sessionDetachCalls).toBe(returnsUnsubscribe ? 1 : 0);
+			// A retained session listener must not reattach input after disposal.
+			sessionStart({}, ctx);
+			expect(inputs.size).toBe(0);
+			unregister = registerAction({ id, description: "Late action", run() {} });
+			expect(shortcutRegistrations).toBe(0);
+			expect(() => dispose()).not.toThrow();
+			expect(inputDetachCalls).toBe(2);
+		} finally {
+			dispose();
+			unregister();
+		}
+	},
+);
 
 test.each([true, false])(
 	"contextual keys preserve native handling across activity, replacement and cleanup (register first: %s)",

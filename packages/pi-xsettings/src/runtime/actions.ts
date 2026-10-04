@@ -53,7 +53,7 @@ export function attachActionShortcuts(
 	});
 	return () => {
 		disposed = true;
-		// Pi 0.84.2 does not return an unsubscribe function from on().
+		// on() may return void; only invoke an actual unsubscribe function.
 		if (typeof detachSession === "function") detachSession();
 		detachRegistration();
 		detachInput?.();
