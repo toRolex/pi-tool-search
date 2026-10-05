@@ -138,13 +138,13 @@ function clickText(editor: StructuredListEditor, text: string, width = 120): voi
 	const lines = editor.render(width).map(stripTerminalSequences);
 	let row = -1;
 	for (let index = lines.length - 1; index >= 0; index -= 1) {
-		if (lines[index]!.includes(text)) {
+		if (lines[index].includes(text)) {
 			row = index;
 			break;
 		}
 	}
 	if (row < 0) throw new Error(`Could not find ${text}.`);
-	const col = lines[row]!.indexOf(text) + Math.floor(text.length / 2);
+	const col = lines[row].indexOf(text) + Math.floor(text.length / 2);
 	pointer(editor, "press", row, col);
 	pointer(editor, "release", row, col);
 }

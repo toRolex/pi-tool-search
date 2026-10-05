@@ -304,7 +304,7 @@ export class StructuredListEditor extends ComponentStack {
 		const next = Math.max(0, Math.min(list.length - 1, frame.selected + delta));
 		if (next === frame.selected) return;
 		const [item] = list.splice(frame.selected, 1);
-		list.splice(next, 0, item!);
+		list.splice(next, 0, item);
 		frame.selected = next;
 		this.refreshLayout();
 	}

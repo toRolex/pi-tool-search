@@ -104,7 +104,7 @@ export class StringListEditor extends ComponentStack {
 			onSelectionChange: (_value, index) => {
 				this.selected = index;
 			},
-			onActivate: (_value, index) => this.edit(index, this.draft[index]!),
+			onActivate: (_value, index) => this.edit(index, this.draft[index]),
 		});
 		const buttons = new DialogButtonBar<ListAction>({
 			theme: editorOptions.theme,
@@ -226,7 +226,7 @@ export class StringListEditor extends ComponentStack {
 		const next = Math.max(0, Math.min(this.draft.length - 1, this.selected + delta));
 		if (next === this.selected) return;
 		const [item] = this.draft.splice(this.selected, 1);
-		this.draft.splice(next, 0, item!);
+		this.draft.splice(next, 0, item);
 		this.selected = next;
 		this.syncList();
 	}

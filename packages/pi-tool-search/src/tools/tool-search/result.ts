@@ -70,11 +70,7 @@ export function createToolSearchResult(input: ToolSearchResultInput): AgentToolR
 	}));
 	const after = [...new Set([...input.activeBefore, ...input.added])];
 	const select = input.select;
-	const status = select
-		? selectStatus(select, input.added)
-		: rankedMatches.length === 0
-			? "no_match"
-			: "loaded";
+	const status = select ? selectStatus(select, input.added) : rankedMatches.length === 0 ? "no_match" : "loaded";
 	return {
 		content: [{ type: "text", text: select ? selectText(input, select) : statusText(input, status) }],
 		details: {

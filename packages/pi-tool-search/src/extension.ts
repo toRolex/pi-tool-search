@@ -36,7 +36,9 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	pi.on("session_start", () => {
 		const activeTools = pi.getActiveTools();
 		const active = new Set(activeTools);
-		directTools = pi.getAllTools().filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
+		directTools = pi
+			.getAllTools()
+			.filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
 		directScope.setActive(
 			directScope
 				.tools()

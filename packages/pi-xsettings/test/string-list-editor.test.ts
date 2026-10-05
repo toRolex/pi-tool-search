@@ -72,9 +72,9 @@ function dispatch(
 function clickLabel(editor: StringListEditor, label: string, width = 100): void {
 	const lines = editor.render(width).map(stripTerminalSequences);
 	let row = lines.length - 1;
-	while (row >= 0 && !lines[row]!.includes(label)) row -= 1;
+	while (row >= 0 && !lines[row].includes(label)) row -= 1;
 	if (row < 0) throw new Error(`Missing button: ${label}`);
-	const col = lines[row]!.indexOf(label);
+	const col = lines[row].indexOf(label);
 	dispatch(editor, { type: "press", row, col, button: 0 });
 	dispatch(editor, { type: "release", row, col, button: 0 });
 }

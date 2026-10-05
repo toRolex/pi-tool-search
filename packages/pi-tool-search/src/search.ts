@@ -105,7 +105,7 @@ export function searchTools(query: string, tools: readonly ToolMetadata[], limit
 		for (let index = 0; index < documents.length; index++) {
 			const frequency = frequencies[index] ?? 0;
 			if (frequency === 0) continue;
-			const document = documents[index]!;
+			const document = documents[index];
 			scores[index] +=
 				(inverseDocumentFrequency * frequency * (K1 + 1)) /
 				(frequency + K1 * (1 - B + (B * document.length) / averageLength));

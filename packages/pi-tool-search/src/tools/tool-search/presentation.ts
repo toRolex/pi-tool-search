@@ -66,11 +66,7 @@ export function renderToolSearchResult(
 		action: {
 			verb,
 			detail: details.input.query,
-			status: failed
-				? ("failed" as const)
-				: invalidSelect || noMatch
-					? ("warning" as const)
-					: ("succeeded" as const),
+			status: failed ? ("failed" as const) : invalidSelect || noMatch ? ("warning" as const) : ("succeeded" as const),
 			marker: icon("search"),
 			meta: [`${details.counts.matches} matches`, formatDuration(details.timing.durationMs)],
 		},
@@ -78,9 +74,9 @@ export function renderToolSearchResult(
 		payload: rows.length
 			? { kind: "text" as const, text: rows.join("\n"), revision: details.activation.after.length + rows.length }
 			: invalidSelect
-				// Derived from details, not result.content: a persisted result may carry
-				// an empty content array, so the diagnostics must come from the input.
-				? { kind: "text" as const, text: invalidSelectText(details.input), revision: details.activation.after.length }
+				? // Derived from details, not result.content: a persisted result may carry
+					// an empty content array, so the diagnostics must come from the input.
+					{ kind: "text" as const, text: invalidSelectText(details.input), revision: details.activation.after.length }
 				: undefined,
 		mode: expanded ? ("full" as const) : ("preview" as const),
 	};
@@ -121,12 +117,12 @@ function isToolSearchDetails(details: unknown): details is ToolSearchDetails {
 	if (!Number.isFinite(candidate.timing?.durationMs)) return false;
 	if (candidate.version === 2) {
 		return (
-			(candidate.status === "loaded" || candidate.status === "no_match") &&
-			typeof candidate.input?.query === "string"
+			(candidate.status === "loaded" || candidate.status === "no_match") && typeof candidate.input?.query === "string"
 		);
 	}
 	if (candidate.version !== 3) return false;
-	if (candidate.status !== "loaded" && candidate.status !== "no_match" && candidate.status !== "invalid_select") return false;
+	if (candidate.status !== "loaded" && candidate.status !== "no_match" && candidate.status !== "invalid_select")
+		return false;
 	const input = candidate.input;
 	if (input?.mode === "search") return typeof input.query === "string";
 	if (input?.mode === "select") {

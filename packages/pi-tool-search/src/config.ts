@@ -1,4 +1,14 @@
-import { closeSync, fsyncSync, linkSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+	closeSync,
+	fsyncSync,
+	linkSync,
+	mkdtempSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { parse, stringify } from "smol-toml";
 
@@ -39,7 +49,11 @@ const migrationFileSystem: MigrationFileSystem = {
 		try {
 			writeFileSync(temporaryPath, source);
 			const fd = openSync(temporaryPath, "r");
-			try { fsyncSync(fd); } finally { closeSync(fd); }
+			try {
+				fsyncSync(fd);
+			} finally {
+				closeSync(fd);
+			}
 			if (exclusive) linkSync(temporaryPath, path);
 			else renameSync(temporaryPath, path);
 		} finally {
@@ -85,7 +99,10 @@ export function migrateDeferredTools(
 			fs.write(configPath, source, true);
 			snapshot = parseDeferredTools(source);
 		} catch (error) {
-			throw new Error(`Deferred tools migration: cannot write ${configPath}; legacy config retained. Retry initialization after fixing the write failure.`, { cause: error });
+			throw new Error(
+				`Deferred tools migration: cannot write ${configPath}; legacy config retained. Retry initialization after fixing the write failure.`,
+				{ cause: error },
+			);
 		}
 	}
 	// Parse/stringify handles quoted headers, nested tables, and multiline values safely.
@@ -93,7 +110,10 @@ export function migrateDeferredTools(
 	try {
 		fs.write(legacyPath, stringify(document));
 	} catch (error) {
-		throw new Error(`Deferred tools migration: cannot clean ${legacyPath}; ${configPath} is authoritative. Retry initialization to clean the legacy tools section without overwriting the new config.`, { cause: error });
+		throw new Error(
+			`Deferred tools migration: cannot clean ${legacyPath}; ${configPath} is authoritative. Retry initialization to clean the legacy tools section without overwriting the new config.`,
+			{ cause: error },
+		);
 	}
 	return snapshot;
 }

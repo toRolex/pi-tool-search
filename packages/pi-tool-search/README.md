@@ -75,7 +75,7 @@ The input is an object with a required query and an optional result limit
 (integer, 1 to 8):
 
 ```json
-{"query":"search the web","limit":3}
+{ "query": "search the web", "limit": 3 }
 ```
 
 Search covers tool names, descriptions, parameter names, and parameter
@@ -100,14 +100,14 @@ The result details are JSON-serializable and versioned:
 
 ```ts
 type ToolSearchDetails = {
-  version: 2;
-  tool: "tool_search";
-  status: "loaded" | "no_match";
-  input: { query: string; normalizedQuery: string; limit: number };
-  rankedMatches: Array<{ name: string; description: string; score: number }>;
-  activation: { before: string[]; added: string[]; after: string[] };
-  counts: { registered: number; searchable: number; matches: number; added: number };
-  timing: { durationMs: number };
+	version: 2;
+	tool: "tool_search";
+	status: "loaded" | "no_match";
+	input: { query: string; normalizedQuery: string; limit: number };
+	rankedMatches: Array<{ name: string; description: string; score: number }>;
+	activation: { before: string[]; added: string[]; after: string[] };
+	counts: { registered: number; searchable: number; matches: number; added: number };
+	timing: { durationMs: number };
 };
 ```
 
@@ -115,9 +115,9 @@ A scope passed to the tool has these operations:
 
 ```ts
 type ToolSearchScope = {
-  tools(): readonly { name: string; description: string; parameters?: unknown }[];
-  active(): readonly string[];
-  setActive(names: readonly string[]): void;
+	tools(): readonly { name: string; description: string; parameters?: unknown }[];
+	active(): readonly string[];
+	setActive(names: readonly string[]): void;
 };
 ```
 
@@ -136,15 +136,15 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 
 ## Layout
 
-| Responsibility | File |
-| --- | --- |
-| Extension entry, scope selection, deferred activation | `src/extension.ts` |
-| Tool definition and execution | `src/tools/tool-search/definition.ts` |
-| Result shape (`createToolSearchResult`) | `src/tools/tool-search/result.ts` |
-| Transcript rendering | `src/tools/tool-search/presentation.ts` |
-| Search and ranking | `src/search.ts` |
-| Settings definitions | `src/contributions/xsettings.ts` |
-| Module exports | `src/index.ts` |
+| Responsibility                                        | File                                    |
+| ----------------------------------------------------- | --------------------------------------- |
+| Extension entry, scope selection, deferred activation | `src/extension.ts`                      |
+| Tool definition and execution                         | `src/tools/tool-search/definition.ts`   |
+| Result shape (`createToolSearchResult`)               | `src/tools/tool-search/result.ts`       |
+| Transcript rendering                                  | `src/tools/tool-search/presentation.ts` |
+| Search and ranking                                    | `src/search.ts`                         |
+| Settings definitions                                  | `src/contributions/xsettings.ts`        |
+| Module exports                                        | `src/index.ts`                          |
 
 ## Develop
 

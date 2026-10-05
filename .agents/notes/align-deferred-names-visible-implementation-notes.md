@@ -31,6 +31,7 @@ Handoff：/tmp/handoff-pi-tool-search-toolsearch-alignment.md。目标：deferre
 **judge 修正采纳**：不截断名单；section 与 select 用同一可执行 universe；all-already-active 不能误报 no_match；presentation 必须真改（成功分支只渲染 rankedMatches）。
 
 **最终形状**：
+
 1. 新文件 `select.ts`：`parseSelectQuery(query)` 纯解析（`select:` 前缀、逗号分隔、trim、去空段、去重保序；无前缀返 undefined）；`renderDeferredSection(names)` 返回 section 文本或 undefined（空名单删 key）。SECTION_KEY=`deferred-tools`（合法：小写连字符，非 preamble）。
 2. `result.ts` v3：status 加 `invalid_select`；input 判别联合 search|select；guard 接受 v2|v3。
 3. `definition.ts`：executeToolSearch 分支 select（全有或全无：unknown 非空 → 不激活任何工具；select 限 deferred 名单内（xsettings 为意图源）；already-active 幂等；limit 忽略）。fuzzy 路径逐字节不变。ToolSearchScope 不改；deferred 名单经新参数 `getDeferredNames` 传入 executeToolSearch 与 adapter。

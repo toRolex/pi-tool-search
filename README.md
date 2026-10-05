@@ -14,11 +14,11 @@ This fork keeps the original capability: deferring regular `direct` tools (built
 
 Vendored from npm at the last published versions, with fixes:
 
-| Package | Version | Source |
-| --- | --- | --- |
-| `@luan.sh/pi-tool-search` | 0.3.8 | npm |
-| `@luan.sh/pi-xsettings` | 0.3.6 | npm, patched |
-| `@luan.sh/pi-libtui` | 0.3.9 | bundled |
+| Package                   | Version | Source       |
+| ------------------------- | ------- | ------------ |
+| `@luan.sh/pi-tool-search` | 0.3.8   | npm          |
+| `@luan.sh/pi-xsettings`   | 0.3.6   | npm, patched |
+| `@luan.sh/pi-libtui`      | 0.3.9   | bundled      |
 
 Changes against the published packages:
 
@@ -35,7 +35,7 @@ Disable Pi's built-in tool-search extension (same `tool_search` name, different 
 
 ```json
 {
-  "extensions": ["-builtin:tool-search"]
+	"extensions": ["-builtin:tool-search"]
 }
 ```
 
