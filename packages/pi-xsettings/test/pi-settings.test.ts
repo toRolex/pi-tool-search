@@ -155,6 +155,8 @@ describe("Pi settings reconciliation", () => {
 			const original = readFileSync(path, "utf8");
 			writeFileSync(path, "[broken");
 			const before = [f.tomlPath, f.jsonPath, f.baselinePath].map((file) => readFileSync(file, "utf8"));
+			// @types/bun 将 expect().rejects.toThrow() 类型标为非 Promise，但运行时是 Promise，且必须 await 才能捕获拒绝。
+			// eslint-disable-next-line @typescript-eslint/await-thenable
 			await expect(f.sync.reconcile()).rejects.toThrow();
 			expect([f.tomlPath, f.jsonPath, f.baselinePath].map((file) => readFileSync(file, "utf8"))).toEqual(before);
 			writeFileSync(path, original);

@@ -603,7 +603,7 @@ export class XSettingsScreen extends ComponentStack {
 	private movePage(delta: number): void {
 		const definitions = pages();
 		const index = definitions.findIndex((page) => page.id === this.activePage);
-		this.selectPage(definitions[(index + delta + definitions.length) % definitions.length]!.id);
+		this.selectPage(definitions[(index + delta + definitions.length) % definitions.length].id);
 	}
 
 	private selectPage(page: SettingPage): void {

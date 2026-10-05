@@ -114,18 +114,18 @@ when no panel host is present.
 
 Namespace `@luan.sh/pi-libtui` (label "TUI", all applied live):
 
-| Key | Default |
-| --- | --- |
-| `iconPack` | `unicode` (`nerd-fonts`, `unicode`, `emoji`) |
-| `activityIndicator` / `activityMessage` | `spinner` / `phase` |
-| `textEffect` / `textEffectScope` / `pulseEffect` | `off` / `message` / `off` |
-| `statusPresentation` | `standard` |
-| `animationSpeed` | `normal` (`slow`, `relaxed`, `normal`, `fast`, `very-fast`) |
-| `animationSmoothness` | `balanced` (`economy`, `balanced`, `smooth`, `ultra`) |
-| `thinking*`, `working*`, `tool*` (`Indicator`, `Message`, `TextEffect`, `PulseEffect`, `Presentation`) | `inherit` (use the General value) |
-| `powerline` / `powerlineButtons` / `softCursor` | `false` |
-| `userMessageBubbles` | `false` (right-aligned user messages; UI → TUI) |
-| `insertionCursor` / `navigationCursor` / `selectionCursor` | `virtual` |
+| Key                                                                                                    | Default                                                     |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `iconPack`                                                                                             | `unicode` (`nerd-fonts`, `unicode`, `emoji`)                |
+| `activityIndicator` / `activityMessage`                                                                | `spinner` / `phase`                                         |
+| `textEffect` / `textEffectScope` / `pulseEffect`                                                       | `off` / `message` / `off`                                   |
+| `statusPresentation`                                                                                   | `standard`                                                  |
+| `animationSpeed`                                                                                       | `normal` (`slow`, `relaxed`, `normal`, `fast`, `very-fast`) |
+| `animationSmoothness`                                                                                  | `balanced` (`economy`, `balanced`, `smooth`, `ultra`)       |
+| `thinking*`, `working*`, `tool*` (`Indicator`, `Message`, `TextEffect`, `PulseEffect`, `Presentation`) | `inherit` (use the General value)                           |
+| `powerline` / `powerlineButtons` / `softCursor`                                                        | `false`                                                     |
+| `userMessageBubbles`                                                                                   | `false` (right-aligned user messages; UI → TUI)             |
+| `insertionCursor` / `navigationCursor` / `selectionCursor`                                             | `virtual`                                                   |
 
 ## Actions and keybindings
 
@@ -141,10 +141,10 @@ ID; each value is a key ID string or an array of key ID strings:
 
 ```json
 {
-  "xsettings.toggle": "ctrl+,",
-  "xsettings.cursor.toggle": "ctrl+t",
-  "xsettings.effort.decrease": ["alt+,"],
-  "xsettings.effort.increase": ["alt+."]
+	"xsettings.toggle": "ctrl+,",
+	"xsettings.cursor.toggle": "ctrl+t",
+	"xsettings.effort.decrease": ["alt+,"],
+	"xsettings.effort.increase": ["alt+."]
 }
 ```
 
@@ -163,28 +163,33 @@ Import the UI-free SDK, not the extension entry point:
 import { createSettings } from "@luan.sh/pi-xsettings/sdk";
 
 const settings = createSettings({
-  namespace: "pi-example",
-  label: "Example",
-  definitions: {
-    enabled: {
-      label: "Enabled",
-      description: "Enable the example feature.",
-      category: "behavior",
-      type: "boolean",
-      default: true,
-    },
-    mode: {
-      label: "Mode",
-      description: "How the feature runs.",
-      category: "behavior",
-      type: "enum",
-      default: "safe",
-      options: [{ value: "safe", label: "Safe", description: "" }, { value: "fast", label: "Fast", description: "" }],
-    },
-  },
+	namespace: "pi-example",
+	label: "Example",
+	definitions: {
+		enabled: {
+			label: "Enabled",
+			description: "Enable the example feature.",
+			category: "behavior",
+			type: "boolean",
+			default: true,
+		},
+		mode: {
+			label: "Mode",
+			description: "How the feature runs.",
+			category: "behavior",
+			type: "enum",
+			default: "safe",
+			options: [
+				{ value: "safe", label: "Safe", description: "" },
+				{ value: "fast", label: "Fast", description: "" },
+			],
+		},
+	},
 });
 
-const unregister = settings.register((values) => { /* values.enabled, values.mode */ });
+const unregister = settings.register((values) => {
+	/* values.enabled, values.mode */
+});
 ```
 
 `createSettings()` returns `defaults` (compiled defaults), `get()` (a clone of
@@ -210,18 +215,18 @@ create a separate settings file or settings screen.
 
 ## Layout
 
-| Responsibility | File |
-| --- | --- |
-| Pi command, actions, side-panel tab, lifecycle | `src/extension.ts` |
-| UI-free SDK | `src/sdk.ts` |
-| Cross-extension registry protocol | `src/protocol/settings.ts` |
-| `xsettings.toml` load, set, unset, atomic write | `src/config/store.ts` |
-| Pi setting definitions | `src/config/pi-settings.ts` |
-| `@luan.sh/pi-libtui` and `@luan.sh/pi-xsettings` definitions | `src/config/tui-settings.ts`, `src/config/presentation.ts` |
-| Pi settings reconciliation and file watching | `src/config/pi-settings-sync.ts`, `src/runtime/settings-watch.ts` |
-| Value resolution, publication, reload decision | `src/runtime/settings.ts`, `src/runtime/apply.ts` |
-| Keybinding bridge and effort actions | `src/runtime/actions.ts`, `src/runtime/effort.ts` |
-| Editor session, fields, list editors, screen | `src/ui/` |
+| Responsibility                                               | File                                                              |
+| ------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Pi command, actions, side-panel tab, lifecycle               | `src/extension.ts`                                                |
+| UI-free SDK                                                  | `src/sdk.ts`                                                      |
+| Cross-extension registry protocol                            | `src/protocol/settings.ts`                                        |
+| `xsettings.toml` load, set, unset, atomic write              | `src/config/store.ts`                                             |
+| Pi setting definitions                                       | `src/config/pi-settings.ts`                                       |
+| `@luan.sh/pi-libtui` and `@luan.sh/pi-xsettings` definitions | `src/config/tui-settings.ts`, `src/config/presentation.ts`        |
+| Pi settings reconciliation and file watching                 | `src/config/pi-settings-sync.ts`, `src/runtime/settings-watch.ts` |
+| Value resolution, publication, reload decision               | `src/runtime/settings.ts`, `src/runtime/apply.ts`                 |
+| Keybinding bridge and effort actions                         | `src/runtime/actions.ts`, `src/runtime/effort.ts`                 |
+| Editor session, fields, list editors, screen                 | `src/ui/`                                                         |
 
 ## Develop
 

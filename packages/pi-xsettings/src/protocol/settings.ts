@@ -162,7 +162,7 @@ export function ensureXSettingsRegistry(scope: typeof globalThis = globalThis): 
 		},
 		async publish(namespace, values) {
 			registry.values[namespace] = Object.freeze({ ...values });
-			await registry.registrations[namespace]?.onValues?.(registry.values[namespace]!);
+			await registry.registrations[namespace]?.onValues?.(registry.values[namespace]);
 		},
 		onRegister(listener) {
 			registry.listeners.push(listener);

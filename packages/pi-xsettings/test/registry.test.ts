@@ -158,7 +158,7 @@ describe("structural registries", () => {
 		const registry = ensureXSettingsRegistry();
 		await registry.publish("roles", { roles: next });
 		expect(client.get().roles).toEqual(next);
-		next[0]!.name = "mutated-after-save";
+		next[0].name = "mutated-after-save";
 		expect(client.get().roles[0]?.name).toBe("task");
 		unregister();
 	});

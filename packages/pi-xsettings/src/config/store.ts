@@ -15,7 +15,7 @@ const { parse, stringify } = createRequire(realpathSync(fileURLToPath(import.met
 
 export type SettingsRecord = SmolToml.TomlTableWithoutBigInt;
 export function parseXSettings(source: string): SettingsRecord {
-	return parse(source, { integersAsBigInt: false }) as SettingsRecord;
+	return parse(source, { integersAsBigInt: false });
 }
 
 export type StoredSettingValue = SmolToml.TomlValueWithoutBigInt;

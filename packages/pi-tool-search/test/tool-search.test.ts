@@ -101,17 +101,20 @@ describe("deferred config", () => {
 			const snapshot = migrateDeferredTools(configPath, legacy, {
 				read(path) {
 					reads.push(path);
-					if (reads.filter(value => value === path).length > 1) throw new Error("duplicate read");
+					if (reads.filter((value) => value === path).length > 1) throw new Error("duplicate read");
 					return readFileSync(path, "utf8");
 				},
 				write: (path, source, exclusive) => writeFileSync(path, source, { flag: exclusive ? "wx" : "w" }),
 			});
-			expect(reads.filter(path => path === configPath)).toHaveLength(1);
+			expect(reads.filter((path) => path === configPath)).toHaveLength(1);
 			expect(snapshot).toEqual([existing ? "new" : "old"]);
 		});
 	}
 	test("parses string arrays and ignores non-string entries, empty strings, and duplicates", () => {
-		expect(parseDeferredTools('[tools]\ndeferred = [\n # comment\n "read", \'write\', 1, "", "read",\n]')).toEqual(["read", "write"]);
+		expect(parseDeferredTools('[tools]\ndeferred = [\n # comment\n "read", \'write\', 1, "", "read",\n]')).toEqual([
+			"read",
+			"write",
+		]);
 	});
 	test("returns empty for missing key and rejects malformed TOML", () => {
 		expect(parseDeferredTools("[tools]")).toEqual([]);
@@ -128,7 +131,10 @@ describe("deferred config", () => {
 	test("migrates the 25-name set, writes only deferred, preserves other section values, and is idempotent", () => {
 		const legacy = join(configDir, "xsettings.toml");
 		const names = Array.from({ length: 25 }, (_, i) => `tool_${i}`);
-		writeFileSync(legacy, `[appearance]\ntheme = "keep"\n\n[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["ignore"]\n\n[behavior]\nx = true\n`);
+		writeFileSync(
+			legacy,
+			`[appearance]\ntheme = "keep"\n\n[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["ignore"]\n\n[behavior]\nx = true\n`,
+		);
 		migrateDeferredTools(configPath, legacy);
 		expect(new Set(readDeferredTools(configPath))).toEqual(new Set(names));
 		expect(parse(readFileSync(configPath, "utf8"))).toEqual({ tools: { deferred: names } });
@@ -136,7 +142,9 @@ describe("deferred config", () => {
 		const before = [readFileSync(configPath, "utf8"), readFileSync(legacy, "utf8")];
 		migrateDeferredTools(configPath, legacy, {
 			read: (path) => readFileSync(path, "utf8"),
-			write() { throw new Error("repeat initialization must not write"); },
+			write() {
+				throw new Error("repeat initialization must not write");
+			},
 		});
 		expect([readFileSync(configPath, "utf8"), readFileSync(legacy, "utf8")]).toEqual(before);
 	});
@@ -198,9 +206,13 @@ describe("deferred config", () => {
 		try {
 			migrateDeferredTools(configPath, legacy, {
 				read: (path) => readFileSync(path, "utf8"),
-				write() { throw failure; },
+				write() {
+					throw failure;
+				},
 			});
-		} catch (error) { caught = error; }
+		} catch (error) {
+			caught = error;
+		}
 		expect(caught).toBeInstanceOf(Error);
 		expect((caught as Error).message).toContain("legacy config retained. Retry initialization");
 		expect((caught as Error).cause).toBe(failure);
@@ -213,14 +225,16 @@ describe("deferred config", () => {
 		const source = '[tools]\npi-tool-search.tools = ["old"]\n';
 		writeFileSync(legacy, source);
 		const writes: string[] = [];
-		expect(() => migrateDeferredTools(configPath, legacy, {
-			read: (path) => readFileSync(path, "utf8"),
-			write(path, value, exclusive) {
-				writes.push(path);
-				if (path === legacy) throw new Error("injected cleanup failure");
-				writeFileSync(path, value, { flag: exclusive ? "wx" : "w" });
-			},
-		})).toThrow("Retry initialization to clean the legacy tools section without overwriting the new config");
+		expect(() =>
+			migrateDeferredTools(configPath, legacy, {
+				read: (path) => readFileSync(path, "utf8"),
+				write(path, value, exclusive) {
+					writes.push(path);
+					if (path === legacy) throw new Error("injected cleanup failure");
+					writeFileSync(path, value, { flag: exclusive ? "wx" : "w" });
+				},
+			}),
+		).toThrow("Retry initialization to clean the legacy tools section without overwriting the new config");
 		expect(readDeferredTools(configPath)).toEqual(["old"]);
 		expect(readFileSync(legacy, "utf8")).toBe(source);
 		migrateDeferredTools(configPath, legacy, {
@@ -291,14 +305,14 @@ describe("deferred tool section", () => {
 
 	test("lists pending names and shows a two-name select example", () => {
 		expect(renderDeferredSection(["read", "write_stdin", "exec_command"])).toBe(
-			'These tools are available but their schemas are not loaded: read, write_stdin, exec_command.\n' +
+			"These tools are available but their schemas are not loaded: read, write_stdin, exec_command.\n" +
 				'Use tool_search with query "select:<name>" (e.g. "select:read,write_stdin") to load tool schemas before calling them.',
 		);
 	});
 
 	test("shows a single-name example when only one tool is pending", () => {
 		expect(renderDeferredSection(["read"])).toBe(
-			'These tools are available but their schemas are not loaded: read.\n' +
+			"These tools are available but their schemas are not loaded: read.\n" +
 				'Use tool_search with query "select:<name>" (e.g. "select:read") to load tool schemas before calling them.',
 		);
 	});
@@ -368,15 +382,18 @@ describe("select loading", () => {
 	test("activates nothing when any requested name is unknown", async () => {
 		const active = [TOOL_SEARCH_NAME];
 		const { scope, updates } = toolApi(
-			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read a file."), metadata("write_stdin", "Continue.")],
+			[
+				metadata(TOOL_SEARCH_NAME, "Search tools."),
+				metadata("read", "Read a file."),
+				metadata("write_stdin", "Continue."),
+			],
 			active,
 		);
 
-		const result = await executeToolSearch(
-			{ query: "select:read,missing" },
-			scope("read", "write_stdin"),
-			() => ["read", "write_stdin"],
-		);
+		const result = await executeToolSearch({ query: "select:read,missing" }, scope("read", "write_stdin"), () => [
+			"read",
+			"write_stdin",
+		]);
 
 		expect(updates).toEqual([]);
 		expect(result.details).toMatchObject({
@@ -394,15 +411,17 @@ describe("select loading", () => {
 	test("rejects a registered name outside the deferred list", async () => {
 		const active = [TOOL_SEARCH_NAME];
 		const { scope, updates } = toolApi(
-			[metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("read", "Read."), metadata("disabled_weather", "Weather.")],
+			[
+				metadata(TOOL_SEARCH_NAME, "Search tools."),
+				metadata("read", "Read."),
+				metadata("disabled_weather", "Weather."),
+			],
 			active,
 		);
 
-		const result = await executeToolSearch(
-			{ query: "select:disabled_weather" },
-			scope("disabled_weather"),
-			() => ["read"],
-		);
+		const result = await executeToolSearch({ query: "select:disabled_weather" }, scope("disabled_weather"), () => [
+			"read",
+		]);
 
 		expect(updates).toEqual([]);
 		expect(result.details).toMatchObject({
@@ -418,11 +437,10 @@ describe("select loading", () => {
 			active,
 		);
 
-		const result = await executeToolSearch(
-			{ query: "select:read,write_stdin" },
-			scope("read", "write_stdin"),
-			() => ["read", "write_stdin"],
-		);
+		const result = await executeToolSearch({ query: "select:read,write_stdin" }, scope("read", "write_stdin"), () => [
+			"read",
+			"write_stdin",
+		]);
 
 		expect(updates).toEqual([[TOOL_SEARCH_NAME, "read", "write_stdin"]]);
 		expect(result.details).toMatchObject({
@@ -430,9 +448,7 @@ describe("select loading", () => {
 			input: { mode: "select", requested: ["read", "write_stdin"], unknown: [], alreadyActive: ["read"] },
 			activation: { added: ["write_stdin"] },
 		});
-		expect(result.content).toEqual([
-			{ type: "text", text: "Loaded tools: write_stdin. Already active: read." },
-		]);
+		expect(result.content).toEqual([{ type: "text", text: "Loaded tools: write_stdin. Already active: read." }]);
 	});
 
 	test("does not reactivate only-active tools", async () => {
@@ -491,17 +507,26 @@ function extensionHarness(active: string[] = [], tools: ToolMetadata[] = []) {
 	const updates: string[][] = [];
 	let tool!: ReturnType<typeof createToolSearchTool>;
 	const pi = {
-		registerTool(value: typeof tool) { tool = value; },
+		registerTool(value: typeof tool) {
+			tool = value;
+		},
 		getAllTools: () => tools,
 		getActiveTools: () => [...active],
 		setActiveTools(names: string[]) {
 			active.splice(0, active.length, ...names);
 			updates.push([...names]);
 		},
-		on(event: string, handler: (event: HarnessEvent) => void) { handlers.set(event, handler); },
+		on(event: string, handler: (event: HarnessEvent) => void) {
+			handlers.set(event, handler);
+		},
 	} as unknown as ExtensionAPI;
 	createToolSearchExtension(pi, configPath);
-	return { tool, updates, events: [...handlers.keys()], emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value) };
+	return {
+		tool,
+		updates,
+		events: [...handlers.keys()],
+		emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value),
+	};
 }
 
 describe("single-extension lifecycle", () => {
@@ -514,11 +539,16 @@ describe("single-extension lifecycle", () => {
 			namespace: "pi-tool-search",
 			label: "Stale tool search",
 			definitions: [],
-			onValues: values => { published.push(values); },
+			onValues: (values) => {
+				published.push(values);
+			},
 		});
 		configure(["weather"]);
 		const active = [TOOL_SEARCH_NAME, "weather", "issues"];
-		const host = extensionHarness(active, active.map(name => metadata(name, name)));
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+		);
 		try {
 			await registry.publish("pi-tool-search", { tools: ["issues"] });
 			expect(published).toEqual([{ tools: ["issues"] }]);
@@ -527,16 +557,21 @@ describe("single-extension lifecycle", () => {
 			await registry.publish("pi-tool-search", { tools: [] });
 			active.push("weather");
 			host.emit("before_agent_start", { systemPromptOptions: {} });
-			expect(host.updates).toEqual([[TOOL_SEARCH_NAME, "issues"], [TOOL_SEARCH_NAME, "issues"]]);
+			expect(host.updates).toEqual([
+				[TOOL_SEARCH_NAME, "issues"],
+				[TOOL_SEARCH_NAME, "issues"],
+			]);
 			const loaded = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
 			expect(loaded.details.activation.added).toEqual(["weather"]);
-		} finally { unregister(); }
+		} finally {
+			unregister();
+		}
 	});
 	test("TOML alone defers and select activation survives successive turns", async () => {
 		configure(["weather", "other", "unknown"]);
 		expect(Reflect.has(globalThis, SETTINGS_KEY)).toBe(false);
 		const active = [TOOL_SEARCH_NAME, "read", "weather", "other"];
-		const tools = [TOOL_SEARCH_NAME, "read", "weather", "other"].map(name => metadata(name, name));
+		const tools = [TOOL_SEARCH_NAME, "read", "weather", "other"].map((name) => metadata(name, name));
 		const host = extensionHarness(active, tools);
 		host.emit("session_start");
 		expect(active).toEqual([TOOL_SEARCH_NAME, "read"]);
@@ -556,13 +591,27 @@ describe("single-extension lifecycle", () => {
 	test("call and result previews render without an extension host", async () => {
 		configureTuiAppearance({ iconPack: "emoji" });
 		configure(["weather"]);
-		const host = extensionHarness([TOOL_SEARCH_NAME, "weather"], [metadata(TOOL_SEARCH_NAME, "Search"), metadata("weather", "Forecast")]);
+		const host = extensionHarness(
+			[TOOL_SEARCH_NAME, "weather"],
+			[metadata(TOOL_SEARCH_NAME, "Search"), metadata("weather", "Forecast")],
+		);
 		host.emit("session_start");
-		const context = { args: { query: "select:weather" }, executionStarted: true, invalidate() {}, isError: false, lastComponent: undefined };
-		const call = host.tool.renderCall!({ query: "select:weather" }, presentationTheme, { ...context, executionStarted: false } as never);
+		const context = {
+			args: { query: "select:weather" },
+			executionStarted: true,
+			invalidate() {},
+			isError: false,
+			lastComponent: undefined,
+		};
+		const call = host.tool.renderCall!({ query: "select:weather" }, presentationTheme, {
+			...context,
+			executionStarted: false,
+		} as never);
 		expect(Bun.stripANSI(call.render(80).join("\n"))).toContain("select:weather");
 		const result = await host.tool.execute("preview", { query: "select:weather" }, undefined, undefined, {} as never);
-		const rendered = Bun.stripANSI(renderToolSearchResult(result, presentationTheme, context, true).render(80).join("\n"));
+		const rendered = Bun.stripANSI(
+			renderToolSearchResult(result, presentationTheme, context, true).render(80).join("\n"),
+		);
 		expect(rendered).toContain("Loaded tools");
 		expect(rendered).toContain("weather");
 	});
@@ -574,7 +623,11 @@ describe("dynamic loading", () => {
 		const names = Array.from({ length: 25 }, (_, index) => `tool_${index}`);
 		writeFileSync(legacy, `[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["direct"]\n`);
 		const active = [TOOL_SEARCH_NAME, "direct", ...names];
-		const tools = [metadata(TOOL_SEARCH_NAME, "Search"), metadata("direct", "Direct"), ...names.map((name) => metadata(name, "Deferred"))];
+		const tools = [
+			metadata(TOOL_SEARCH_NAME, "Search"),
+			metadata("direct", "Direct"),
+			...names.map((name) => metadata(name, "Deferred")),
+		];
 		const host = extensionHarness(active, tools);
 		expect(new Set(readDeferredTools(configPath))).toEqual(new Set(names));
 		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
@@ -843,7 +896,13 @@ describe("dynamic loading", () => {
 					version: 3,
 					tool: "tool_search",
 					status: "invalid_select",
-					input: { mode: "select", query: "select:missing", requested: ["missing"], unknown: ["missing"], alreadyActive: [] },
+					input: {
+						mode: "select",
+						query: "select:missing",
+						requested: ["missing"],
+						unknown: ["missing"],
+						alreadyActive: [],
+					},
 					rankedMatches: [],
 					activation: { before: [TOOL_SEARCH_NAME], added: [], after: [TOOL_SEARCH_NAME] },
 					counts: { registered: 1, searchable: 1, matches: 0, added: 0 },
@@ -873,7 +932,13 @@ describe("dynamic loading", () => {
 					version: 3,
 					tool: "tool_search",
 					status: "invalid_select",
-					input: { mode: "select", query: "select:missing", requested: ["missing"], unknown: ["missing"], alreadyActive: [] },
+					input: {
+						mode: "select",
+						query: "select:missing",
+						requested: ["missing"],
+						unknown: ["missing"],
+						alreadyActive: [],
+					},
 					rankedMatches: [],
 					activation: { before: [TOOL_SEARCH_NAME], added: [], after: [TOOL_SEARCH_NAME] },
 					counts: { registered: 1, searchable: 1, matches: 0, added: 0 },
@@ -917,11 +982,12 @@ describe("dynamic loading", () => {
 		for (const handler of handlers.get("session_start") ?? []) await handler();
 
 		const sections: Record<string, string> = {};
-		for (const handler of handlers.get("before_agent_start") ?? []) await handler({ systemPromptOptions: { sections } });
+		for (const handler of handlers.get("before_agent_start") ?? [])
+			await handler({ systemPromptOptions: { sections } });
 
 		expect(active).toEqual([TOOL_SEARCH_NAME]);
 		expect(sections[DEFERRED_SECTION_KEY]).toBe(
-			'These tools are available but their schemas are not loaded: deferred_weather.\n' +
+			"These tools are available but their schemas are not loaded: deferred_weather.\n" +
 				'Use tool_search with query "select:<name>" (e.g. "select:deferred_weather") to load tool schemas before calling them.',
 		);
 

@@ -132,15 +132,15 @@ describe("xsettings shared pointer composition", () => {
 		const lines = editor.render(80).map(stripTerminalSequences);
 		const row = lines.findIndex((line) => line.includes("Second"));
 		expect(row).toBeGreaterThanOrEqual(0);
-		dispatch(editor, { type: "move", row, col: lines[row]!.indexOf("Second") });
-		const labelHover = editor.render(80)[row]!;
+		dispatch(editor, { type: "move", row, col: lines[row].indexOf("Second") });
+		const labelHover = editor.render(80)[row];
 		expect(labelHover).not.toContain(tuiTheme(theme).bgAnsi("surface.hover"));
-		dispatch(editor, { type: "move", row, col: lines[row]!.lastIndexOf("off") });
-		const controlHover = editor.render(80)[row]!;
+		dispatch(editor, { type: "move", row, col: lines[row].lastIndexOf("off") });
+		const controlHover = editor.render(80)[row];
 		expect(controlHover).toContain(tuiTheme(theme).bgAnsi("surface.hover"));
-		click(editor, row, lines[row]!.indexOf("Second"));
+		click(editor, row, lines[row].indexOf("Second"));
 		expect(changes).toEqual([]);
-		click(editor, row, lines[row]!.lastIndexOf("off"));
+		click(editor, row, lines[row].lastIndexOf("off"));
 		expect(changes).toEqual([["second", true]]);
 	});
 
@@ -182,7 +182,7 @@ describe("xsettings shared pointer composition", () => {
 		const fieldRow = lines.findIndex((line) => line.includes("Terminal images"));
 		click(editor, headingRow, 3);
 		expect(changes).toEqual([]);
-		click(editor, fieldRow, lines[fieldRow]!.lastIndexOf("off"));
+		click(editor, fieldRow, lines[fieldRow].lastIndexOf("off"));
 		expect(changes).toEqual([["terminal", true]]);
 	});
 
@@ -303,7 +303,7 @@ describe("xsettings shared pointer composition", () => {
 		const lines = screen.render(80).map(stripTerminalSequences);
 		expect(lines[0]).toContain(`${icon("search")} cache`);
 		const pageColumns = Reflect.get(screen, "pageColumns") as { getBodyOffset(): number };
-		expect(lines[0]!.slice(0, pageColumns.getBodyOffset() - 1)).not.toContain("›");
+		expect(lines[0].slice(0, pageColumns.getBodyOffset() - 1)).not.toContain("›");
 		expect(lines.join("\n")).toContain("Cache diagnostics");
 		expect(lines.join("\n")).not.toContain("Theme");
 
@@ -504,7 +504,7 @@ describe("xsettings shared pointer composition", () => {
 		const lines = screen.render(64).map(stripTerminalSequences);
 		const labelRow = lines.findIndex((line) => line.includes("Cache miss notices"));
 		expect(labelRow).toBeGreaterThanOrEqual(0);
-		const contentColumn = lines[labelRow]!.indexOf("Cache miss notices") - 2;
+		const contentColumn = lines[labelRow].indexOf("Cache miss notices") - 2;
 		const description = lines
 			.slice(labelRow + 1)
 			.map((line) => line.slice(contentColumn))
@@ -574,12 +574,12 @@ describe("xsettings shared pointer composition", () => {
 
 		let lines = editor.render(60).map(stripTerminalSequences);
 		const labelRow = lines.findIndex((line) => line.includes("Label"));
-		click(editor, labelRow, lines[labelRow]!.lastIndexOf("old"));
+		click(editor, labelRow, lines[labelRow].lastIndexOf("old"));
 		editor.handleInput("\x0b");
 		editor.handleInput("new");
 		lines = editor.render(60).map(stripTerminalSequences);
 		const saveRow = lastLineContaining(lines, "Save");
-		click(editor, saveRow, lines[saveRow]!.indexOf("Save"));
+		click(editor, saveRow, lines[saveRow].indexOf("Save"));
 		expect(changes).toEqual([["label", "new"]]);
 	});
 });
