@@ -16,33 +16,16 @@ assigned to it. It does not inspect or modify the global tool hierarchy.
 pi install npm:@luan.sh/pi-tool-search
 ```
 
-Requires a Rust toolchain (https://rustup.rs). The `code-mode-host` binary
-builds itself on first use under Pi's agent directory
-(`native/code-mode-host/<version>/`). Set `PI_CODE_MODE_HOST_BINARY` to use a
-prebuilt binary.
-
 Deferred tools are configured directly in `~/.pi/agent/tool-search.toml`; no xsettings extension is required.
 
 The package registers no keybindings and no commands. It uses Pi's dynamic
 tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
 
-## Direct use and use under `exec`
+## Scope
 
-Code Mode owns placement. `@luan.sh/pi-tool-search` never decides whether `tool_search`
-is direct or under `exec`.
-
-- When `tool_search` is direct, its assigned scope is the other tools that
-  were active in Pi at session start. Loading a match calls
-  `pi.setActiveTools()` in that direct scope.
-- When Code Mode puts `tool_search` under `exec`, its assigned scope is the
-  sibling tools that Code Mode put under `exec`. Loading a match keeps the
-  newly active tool under `exec`; it does not move the tool to Pi's direct
-  list.
-
-The Code Mode bridge is an execution adapter only. It gives Tool Search the
-current sibling scope when Code Mode asks for it. Code Mode still owns the
-direct-versus-`exec` decision and its settings. This is the only information
-Tool Search receives about Code Mode.
+`@luan.sh/pi-tool-search` always runs as a direct Pi tool. Its assigned scope
+is the other tools that were active in Pi at session start. Loading a match
+calls `pi.setActiveTools()` in that scope.
 
 ## Deferred scope
 
@@ -53,9 +36,8 @@ search index.
 
 The assigned scope is the boundary for both the picker and the search:
 
-- A direct scope contains only the active direct tools that Tool Search was
+- The direct scope contains only the active direct tools that Tool Search was
   assigned.
-- A nested scope contains only the other tools currently under `exec`.
 - Registered tools outside that scope are invisible to `tool_search`.
 - Disabled tools, tools omitted by a strict `--tools` selection, and tools
   outside the current scope are not deferred and do not appear in the picker.
@@ -103,17 +85,9 @@ A successful result reports `Loaded tools: ...`; a no-match result reports
 that no inactive tool matched. Tool Search activates matches on the next model
 request, using Pi's normal dynamic-tool loading behavior.
 
-If `tool_search` is under `exec`, call it as a nested method:
-
-```js
-const result = await tools.tool_search({ query: "search the web" });
-text(result);
-```
-
 `tool_search` is not a parallel-call helper. There is no
 `multi_tool_use.parallel` tool unless another package has separately
-registered one. Use normal JavaScript such as `Promise.all` when calling
-independent nested tools from `exec`.
+registered one.
 
 ## API contract
 
@@ -153,15 +127,10 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 ## Troubleshooting
 
 - **A tool is not in the picker:** it was inactive before Tool Search built its
-  scope, disabled by Pi's tool selection, outside the current `exec` sibling
-  set, or has not been registered yet. Tool Search does not make it deferred.
-- **A checked tool still appears direct:** confirm `tool_search` is direct or
-  under `exec` as intended, then restart the session. Placement belongs to
-  Code Mode; Tool Search cannot change it.
-- **A nested search cannot find a direct tool:** that is expected. A nested
-  Tool Search can see only its sibling tools under `exec`.
-- **A direct search cannot load a tool under `exec`:** that is also expected.
-  Use a `tool_search` instance assigned to that nested scope.
+  scope, disabled by Pi's tool selection, or has not been registered yet. Tool
+  Search does not make it deferred.
+- **A checked tool still appears direct:** restart the session so the deferred
+  set is applied at startup.
 - **A query returns no matches:** search is limited to inactive tools in the
   assigned scope. Check the exact name and description exposed by the picker.
 
@@ -174,7 +143,6 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 | Result shape (`createToolSearchResult`) | `src/tools/tool-search/result.ts` |
 | Transcript rendering | `src/tools/tool-search/presentation.ts` |
 | Search and ranking | `src/search.ts` |
-| Code Mode execution bridge | `src/code-mode-adapter.ts` |
 | Settings definitions | `src/contributions/xsettings.ts` |
 | Module exports | `src/index.ts` |
 

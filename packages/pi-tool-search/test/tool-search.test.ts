@@ -4,7 +4,6 @@ import { parse } from "smol-toml";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import { createToolSearchExtension } from "../src/extension.ts";
-import { getCodeModeToolAdapterRegistry } from "@luan.sh/pi-code-mode/sdk";
 import { ensureXSettingsRegistry } from "../../pi-xsettings/src/protocol/settings.ts";
 import { migrateDeferredTools, parseDeferredTools, readDeferredTools } from "../src/config.ts";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
@@ -16,7 +15,6 @@ import { renderToolSearchResult } from "../src/tools/tool-search/presentation.ts
 import { DEFERRED_SECTION_KEY, parseSelectQuery, renderDeferredSection } from "../src/tools/tool-search/select.ts";
 
 const SETTINGS_KEY = Symbol.for("pi-xsettings/registry/v1");
-const ADAPTERS_KEY = Symbol.for("pi-code-mode/nested-tool-adapters/v2");
 
 let configDir = mkdtempSync(join(tmpdir(), "tool-search-test-"));
 let configPath = join(configDir, "tool-search.toml");
@@ -30,7 +28,6 @@ afterEach(() => {
 	configDir = mkdtempSync(join(tmpdir(), "tool-search-test-"));
 	configPath = join(configDir, "tool-search.toml");
 	Reflect.deleteProperty(globalThis, SETTINGS_KEY);
-	Reflect.deleteProperty(globalThis, ADAPTERS_KEY);
 	configureTuiAppearance(DEFAULT_TUI_APPEARANCE);
 });
 
@@ -507,14 +504,6 @@ function extensionHarness(active: string[] = [], tools: ToolMetadata[] = []) {
 	return { tool, updates, events: [...handlers.keys()], emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value) };
 }
 
-function registeredAdapter() {
-	const adapter = getCodeModeToolAdapterRegistry().list().find(candidate => candidate.name === TOOL_SEARCH_NAME)!;
-	return {
-		onScopeChange: (scope: ReturnType<ReturnType<typeof toolApi>["scope"]>) => adapter.onScopeChange!(scope),
-		invoke: (input: { query: string }) => adapter.invoke(input, {} as never, new AbortController().signal) as ReturnType<typeof executeToolSearch>,
-	};
-}
-
 describe("single-extension lifecycle", () => {
 	test("stale xsettings publications cannot replace the actual deferred snapshot", async () => {
 		// Install a residual registration in the global Symbol.for registry before init.
@@ -564,57 +553,6 @@ describe("single-extension lifecycle", () => {
 		expect(Reflect.has(globalThis, SETTINGS_KEY)).toBe(false);
 	});
 
-	test("nested select preserves outer availability and nested activation across turns", async () => {
-		configure(["weather"]);
-		const active = [TOOL_SEARCH_NAME, "exec", "weather"];
-		const tools = [TOOL_SEARCH_NAME, "exec", "weather"].map(name => metadata(name, name));
-		const host = extensionHarness(active, tools);
-		const nested = ["weather", "sibling"];
-		const { scope } = toolApi([metadata("weather", "Weather"), metadata("sibling", "Sibling")], nested);
-		const adapter = registeredAdapter();
-		adapter.onScopeChange(scope("weather", "sibling"));
-		host.emit("session_start");
-		expect(nested).toEqual(["sibling"]);
-		expect(active).toEqual([TOOL_SEARCH_NAME, "exec", "weather"]);
-		expect(host.updates).toEqual([]);
-		const result = await adapter.invoke({ query: "select:weather" });
-		expect(result.details.activation.added).toEqual(["weather"]);
-		expect(nested).toEqual(["sibling", "weather"]);
-		expect(host.updates).toEqual([]);
-		for (let turn = 0; turn < 2; turn++) {
-			if (!active.includes("weather")) active.push("weather");
-			host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
-			expect(active).toEqual([TOOL_SEARCH_NAME, "exec", "weather"]);
-			expect(nested).toEqual(["sibling", "weather"]);
-			expect(host.updates).toEqual([]);
-		}
-	});
-
-	for (const reason of ["reload", "quit"]) {
-		test(`${reason} disposes the adapter before fresh initialization`, async () => {
-			configure(["weather"]);
-			const tools = [TOOL_SEARCH_NAME, "read", "weather"].map(name => metadata(name, name));
-			const host = extensionHarness([TOOL_SEARCH_NAME, "read", "weather"], tools);
-			const registry = getCodeModeToolAdapterRegistry();
-			const previous = registry.list()[0];
-			host.emit("session_shutdown", { reason: "other" });
-			expect(registry.list()).toEqual([previous]);
-			host.emit("session_shutdown", { reason });
-			expect(registry.list()).toEqual([]);
-			configure(["read"]);
-			const active = [TOOL_SEARCH_NAME, "read", "weather"];
-			const fresh = extensionHarness(active, tools);
-			expect(registry.list()).toHaveLength(1);
-			expect(registry.list()[0]).not.toBe(previous);
-			fresh.emit("session_start");
-			expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
-			const result = await fresh.tool.execute("new", { query: "select:read" }, undefined, undefined, {} as never);
-			expect(result.details.activation.added).toEqual(["read"]);
-			fresh.emit("session_shutdown", { reason });
-			expect(registry.list()).toEqual([]);
-		});
-	}
-
 	test("call and result previews render without an extension host", async () => {
 		configureTuiAppearance({ iconPack: "emoji" });
 		configure(["weather"]);
@@ -655,11 +593,6 @@ describe("dynamic loading", () => {
 		expect(toolSearchExtension.length).toBe(1);
 		const host = extensionHarness();
 		expect(host.tool).toMatchObject({ name: TOOL_SEARCH_NAME });
-		// The public Code Mode capability is invocable once a scope is assigned.
-		const adapter = registeredAdapter();
-		adapter.onScopeChange(toolApi([], []).scope());
-		const result = await adapter.invoke({ query: "select:missing" });
-		expect(result.details.status).toBe("invalid_select");
 	});
 
 	test("owns deferred selection lifecycle without another hierarchy provider", () => {
@@ -682,30 +615,6 @@ describe("dynamic loading", () => {
 		host.emit("session_start");
 
 		expect(active).toEqual([TOOL_SEARCH_NAME, "direct_issues"]);
-	});
-
-	test("uses sibling Code Mode tools when tool_search is under exec", async () => {
-		const activeNested = ["exec_command", "write_stdin"];
-		const activeOuter = ["exec", TOOL_SEARCH_NAME, "read"];
-		const nestedTools = [
-			metadata("exec_command", "Run a shell command."),
-			metadata("write_stdin", "Continue a command."),
-		];
-		configure(["exec_command"]);
-		const host = extensionHarness(activeOuter, [metadata(TOOL_SEARCH_NAME, "Search tools."), ...nestedTools]);
-		const adapter = registeredAdapter();
-		adapter.onScopeChange({
-			tools: () => nestedTools,
-			active: () => [...activeNested],
-			setActive: (names) => activeNested.splice(0, activeNested.length, ...names),
-		});
-		host.emit("session_start");
-
-		expect(activeNested).toEqual(["write_stdin"]);
-		await adapter.invoke({ query: "shell command" });
-		expect(activeNested).toEqual(["write_stdin", "exec_command"]);
-		expect(activeOuter).toEqual(["exec", TOOL_SEARCH_NAME, "read"]);
-		expect(host.updates).toEqual([]);
 	});
 
 	test("excludes active tools and activates matches additively", async () => {

@@ -78,7 +78,7 @@ export function renderToolSearchResult(
 		payload: rows.length
 			? { kind: "text" as const, text: rows.join("\n"), revision: details.activation.after.length + rows.length }
 			: invalidSelect
-				// Derived from details, not result.content: the Code Mode adapter forwards
+				// Derived from details, not result.content: a persisted result may carry
 				// an empty content array, so the diagnostics must come from the input.
 				? { kind: "text" as const, text: invalidSelectText(details.input), revision: details.activation.after.length }
 				: undefined,
@@ -149,8 +149,9 @@ function resultText(result: AgentToolResult<ToolSearchDetails>): string {
 	return (Array.isArray(result.content) ? result.content : [])
 		.flatMap((item) => {
 			if (!item || typeof item !== "object") return [];
-			const type = Reflect.get(item, "type");
-			const text = Reflect.get(item, "text");
+			const entry = item as { type?: unknown; text?: unknown };
+			const type = entry.type;
+			const text = entry.text;
 			return type === "text" && typeof text === "string" ? [text] : [];
 		})
 		.join("\n");
