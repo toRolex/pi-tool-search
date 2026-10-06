@@ -1,0 +1,7 @@
+ts	phase	decision	why	evidence	result
+2026-10-06T07:19:51Z	red	先确认真实select加载再断言恢复	排除无效transcript	evidence/red.log	恢复断言退出1
+2026-10-06T07:21:26Z	control	重新构造干净extension runner而非复用dispose对象	旧runner让实验错误地缺失session_start	evidence/harness-disposed-reuse-failure.log	已纠正探针
+2026-10-06T07:26:00Z	sdk	省略constructor initial作为单变量对照	证明真实restore而非mock工具集合	evidence/builtin-diagnosis.json	bind前后恢复三个工具
+2026-10-06T07:26:00Z	extension	仓库原实现只读加载	不越界修生产代码	evidence/repo-diagnosis.json	bind前恢复后剪除
+2026-10-06T07:23:00Z	cli	真实CLI json fresh fork resume	SDK不能替代CLI参数接线	evidence/cli-builtin.json	三种生命周期实测
+2026-10-06T07:26:00Z	cleanup	提取core生成entries再删缓存	只保留可审查证据	compact-evidence.mjs	缓存已清理

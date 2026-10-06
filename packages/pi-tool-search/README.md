@@ -78,12 +78,46 @@ The input is an object with a required query and an optional result limit
 { "query": "search the web", "limit": 3 }
 ```
 
-Search covers tool names, descriptions, parameter names, and parameter
-descriptions, ranked with BM25 over stemmed tokens with prefix matching for
-terms of three or more characters. It returns at most eight ranked matches.
-A successful result reports `Loaded tools: ...`; a no-match result reports
-that no inactive tool matched. Tool Search activates matches on the next model
-request, using Pi's normal dynamic-tool loading behavior.
+Search covers the tool name, the name with underscores as spaces, the
+description, parameter names and parameter descriptions, and the group a tool
+belongs to, meaning its namespace name, namespace description, and namespace
+instructions. Ranking is BM25 (k1 = 1.2, b = 0.75) over stemmed tokens, with
+prefix matching for query terms of three or more characters, at most eight
+matches, and ties broken by tool name. A tool whose only matching text is its
+namespace still matches. Namespace text carries no
+separate weight, so it competes with the tool's own name and description through
+the same term frequencies and document-length normalization.
+
+### Load exact tools by name
+
+Prefix the query with `select:` to load tools by exact name instead of
+searching:
+
+```json
+{ "query": "select:exec_command,write_stdin" }
+```
+
+`select:` takes a comma-separated list. Segments are trimmed, empty segments and
+duplicates are dropped, and the requested order is preserved. The request is
+all-or-nothing: if any name is not registered, is registered but outside the
+assigned scope, or is in scope but not in the deferred list, no tool is
+activated at all. A `select:` query ignores the result limit. A name that is
+already active is reported but not reactivated.
+
+### Result text
+
+| Situation                                | Text                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| Search matched                           | `Loaded tools: weather_lookup.`                                                    |
+| Search matched nothing                   | `No inactive tools match "weather".`                                               |
+| Select loaded                            | `Loaded tools: exec_command, write_stdin.`                                         |
+| Select loaded, some names already active | `Loaded tools: exec_command. Already active: read.`                                |
+| Select found every name already active   | `Tools already active: read.`                                                      |
+| Select contained a name it cannot load   | `Unknown or non-deferred tools in select query: missing. No tools were activated.` |
+| Select carried no names                  | `No tool names after "select:".`                                                   |
+
+Tool Search activates matches on the next model request, using Pi's normal
+dynamic-tool loading behavior.
 
 `tool_search` is not a parallel-call helper. There is no
 `multi_tool_use.parallel` tool unless another package has separately
@@ -100,10 +134,18 @@ The result details are JSON-serializable and versioned:
 
 ```ts
 type ToolSearchDetails = {
-	version: 2;
+	version: 3;
 	tool: "tool_search";
-	status: "loaded" | "no_match";
-	input: { query: string; normalizedQuery: string; limit: number };
+	status: "loaded" | "no_match" | "invalid_select";
+	input:
+		| { mode: "search"; query: string; normalizedQuery: string; limit: number }
+		| {
+				mode: "select";
+				query: string;
+				requested: readonly string[];
+				unknown: readonly string[];
+				alreadyActive: readonly string[];
+		  };
 	rankedMatches: Array<{ name: string; description: string; score: number }>;
 	activation: { before: string[]; added: string[]; after: string[] };
 	counts: { registered: number; searchable: number; matches: number; added: number };
@@ -111,15 +153,42 @@ type ToolSearchDetails = {
 };
 ```
 
+`status` is `loaded` for a search that matched, and for a select that loaded at
+least one tool or found its request already satisfied. It is `no_match` for a
+search with no match. It is `invalid_select` when the select query names
+anything it cannot load, which includes a mix of loadable and unloadable names,
+or when it names nothing at all. A `select:` input reports `requested`,
+`unknown`, and `alreadyActive`; a search input reports `normalizedQuery` and the
+applied `limit`. `counts` counts the tools in the assigned scope, the inactive
+tools that were searchable, the returned matches, and the names actually
+activated. `rankedMatches` carries the select names that were activated, with
+score `1`.
+
 A scope passed to the tool has these operations:
 
 ```ts
+type ToolNamespace = {
+	name: string;
+	description?: string;
+	instructions?: string;
+};
+
 type ToolSearchScope = {
-	tools(): readonly { name: string; description: string; parameters?: unknown }[];
+	tools(): readonly {
+		name: string;
+		description: string;
+		parameters?: unknown;
+		namespace?: ToolNamespace;
+	}[];
 	active(): readonly string[];
 	setActive(names: readonly string[]): void;
 };
 ```
+
+`ToolNamespace` mirrors the `ToolNamespace` type of
+`@earendil-works/pi-coding-agent` 1.0.4. Pi's `getAllTools()` already returns
+the namespace of every tool, so a scope that passes those entries through
+directly gets namespace-aware search without any extra wiring.
 
 The scope owner remains responsible for deciding which names are available.
 Tool Search only ranks inactive entries and asks that owner to add matches.

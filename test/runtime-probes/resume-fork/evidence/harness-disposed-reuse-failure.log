@@ -1,0 +1,30 @@
+{"scenario":"fresh.session_start","active":["tool_search","keep_tool"],"persisted":[],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-10-390Z_01a11015-8d95-73df-91cc-1e9bad7e9005.jsonl"}
+{"scenario":"fresh.before_select","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-10-390Z_01a11015-8d95-73df-91cc-1e9bad7e9005.jsonl"}
+{"scenario":"fresh.after_select","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-10-390Z_01a11015-8d95-73df-91cc-1e9bad7e9005.jsonl"}
+{"scenario":"new.session_start","active":["tool_search","keep_tool"],"persisted":[],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-12-370Z_01a11015-9552-73df-91cc-1e9d31e9ed80.jsonl"}
+{"scenario":"resume.session_start","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-10-390Z_01a11015-8d95-73df-91cc-1e9bad7e9005.jsonl"}
+{"scenario":"resume.after_prompt","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-10-390Z_01a11015-8d95-73df-91cc-1e9bad7e9005.jsonl"}
+{"scenario":"fork.session_start","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-12-427Z_01a11015-958b-73df-91cc-1e9e8d2b0070.jsonl"}
+{"scenario":"fork.after_prompt","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/sessions/2026-10-06T07-20-12-427Z_01a11015-958b-73df-91cc-1e9e8d2b0070.jsonl"}
+{"scenario":"constructor.omitted_initial.before_bind","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/source-before-resume.jsonl"}
+{"scenario":"constructor.omitted_initial.after_bind","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/source-before-resume.jsonl"}
+{"scenario":"constructor.omitted_initial.after_prompt","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62/source-before-resume.jsonl"}
+Evidence /Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/repo-diagnosis-RWSJ62
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+true !== false
+
+    at file:///Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/probe.mjs:187:9 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: true,
+  expected: false,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.2

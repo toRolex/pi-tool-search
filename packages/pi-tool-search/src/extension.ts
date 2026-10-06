@@ -63,7 +63,8 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 		// A tool counts as loaded when it is in pi's active set, whatever activated it
 		// (tool_search or user toggles); activatedBySearch only protects against pruning.
 		const loaded = new Set(changed ? pi.getActiveTools() : active);
-		const pending = getDeferredNames().filter((name) => !loaded.has(name));
+		const scopeNames = new Set(directTools.map((candidate: { name: string }) => candidate.name));
+		const pending = getDeferredNames().filter((name) => scopeNames.has(name) && !loaded.has(name));
 		const section = renderDeferredSection(pending);
 		if (section === undefined) delete sections[DEFERRED_SECTION_KEY];
 		else sections[DEFERRED_SECTION_KEY] = section;

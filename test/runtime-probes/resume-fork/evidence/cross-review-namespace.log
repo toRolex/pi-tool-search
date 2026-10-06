@@ -1,0 +1,16 @@
+bun test v1.3.12 (700fc117)
+
+packages/pi-tool-search/test/namespace-search.test.ts:
+(pass) namespace text is searchable > matches a tool whose namespace description is the only evidence [2.94ms]
+(pass) namespace text is searchable > matches a tool whose namespace name is the only evidence [0.13ms]
+(pass) namespace text is searchable > matches a tool whose namespace instructions are the only evidence [0.10ms]
+(pass) namespace text is searchable > returns nothing when only the namespace is unrelated to the query [0.06ms]
+(pass) namespace text is searchable > ignores a namespace whose optional fields are absent
+(pass) namespace text through the extension > loads a deferred tool matched only by its namespace text [1.94ms]
+(pass) namespace text ranks below the tool's own metadata > a name match outranks a namespace-only match
+(pass) namespace text ranks below the tool's own metadata > a description match outranks a namespace-only match at equal term frequency [0.23ms]
+
+ 8 pass
+ 0 fail
+ 9 expect() calls
+Ran 8 tests across 1 file. [497.00ms]

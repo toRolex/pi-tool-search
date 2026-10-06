@@ -5,10 +5,18 @@ const B = 0.75;
 const MAX_SCHEMA_DEPTH = 6;
 const MIN_PREFIX_LENGTH = 3;
 
+/** Declared locally because the pinned dev dependency (0.84.2) predates `ToolNamespace` in pi 1.0.4. */
+export interface ToolNamespace {
+	name: string;
+	description?: string;
+	instructions?: string;
+}
+
 export interface ToolMetadata {
 	name: string;
 	description: string;
 	parameters?: unknown;
+	namespace?: ToolNamespace;
 	sourceInfo?: unknown;
 }
 
@@ -64,6 +72,9 @@ function appendSchemaText(schema: unknown, depth: number, output: string[]): voi
 function searchFields(tool: ToolMetadata): string[] {
 	const fields = [tool.name, tool.name.replaceAll("_", " "), tool.description];
 	appendSchemaText(tool.parameters, 0, fields);
+	if (tool.namespace) {
+		fields.push(tool.namespace.name, tool.namespace.description ?? "", tool.namespace.instructions ?? "");
+	}
 	return fields;
 }
 

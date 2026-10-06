@@ -1,0 +1,1765 @@
+{
+	"packageDir": "/Users/rolex/Library/pnpm/global/v11/105ce-18dbda8f62723330-0/node_modules/.pnpm/@earendil-works+pi-coding-agent@1.0.4_@aws-sdk+credential-provider-node@3.972.84_@smithy+signature-v4@5.7.4_ws@8.22.0/node_modules/@earendil-works/pi-coding-agent",
+	"version": "1.0.4",
+	"variant": "builtin",
+	"expectation": "restoration",
+	"evidenceLevel": "real SDK lifecycle and tools, simulated provider",
+	"observations": [
+		{
+			"scenario": "fresh.session_start",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": [],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+		},
+		{
+			"scenario": "fresh.before_select",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": ["tool_search", "keep_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+		},
+		{
+			"scenario": "fresh.after_select",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+		},
+		{
+			"scenario": "new.session_start",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": [],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-630Z_01a1101a-6c9e-7656-934c-25660c459dd2.jsonl"
+		},
+		{
+			"scenario": "resume.session_start",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+		},
+		{
+			"scenario": "resume.after_prompt",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": ["tool_search", "keep_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+		},
+		{
+			"scenario": "resume.after_reselect",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+		},
+		{
+			"scenario": "fork.session_start",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl"
+		},
+		{
+			"scenario": "fork.after_prompt",
+			"active": ["tool_search", "keep_tool"],
+			"persisted": ["tool_search", "keep_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl"
+		},
+		{
+			"scenario": "fork.after_reselect",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl"
+		},
+		{
+			"scenario": "constructor.omitted_initial.before_bind",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl"
+		},
+		{
+			"scenario": "constructor.omitted_initial.after_bind",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl"
+		},
+		{
+			"scenario": "constructor.omitted_initial.after_prompt",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"persisted": ["tool_search", "keep_tool", "probe_tool"],
+			"sessionFile": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl"
+		}
+	],
+	"events": [
+		{
+			"phase": "session_start_pre",
+			"reason": "startup",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "session_start_post",
+			"reason": "startup",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "select_result",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"content": [
+				{
+					"type": "text",
+					"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+				}
+			],
+			"details": {
+				"loaded": ["probe_tool"]
+			},
+			"isError": false
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "shutdown",
+			"reason": "new",
+			"active": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "session_start_pre",
+			"reason": "new",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "session_start_post",
+			"reason": "new",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "shutdown",
+			"reason": "resume",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "session_start_pre",
+			"reason": "resume",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "session_start_post",
+			"reason": "resume",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "select_result",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"content": [
+				{
+					"type": "text",
+					"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+				}
+			],
+			"details": {
+				"loaded": ["probe_tool"]
+			},
+			"isError": false
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "shutdown",
+			"reason": "fork",
+			"active": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "session_start_pre",
+			"reason": "fork",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "session_start_post",
+			"reason": "fork",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool"]
+		},
+		{
+			"phase": "select_result",
+			"active": ["tool_search", "keep_tool", "probe_tool"],
+			"content": [
+				{
+					"type": "text",
+					"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+				}
+			],
+			"details": {
+				"loaded": ["probe_tool"]
+			},
+			"isError": false
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "shutdown",
+			"reason": "quit",
+			"active": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "session_start_pre",
+			"reason": "resume",
+			"active": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "session_start_post",
+			"reason": "resume",
+			"active": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "before_agent_start",
+			"active": ["tool_search", "keep_tool", "probe_tool"]
+		},
+		{
+			"phase": "provider_request",
+			"variant": "builtin",
+			"declared": ["tool_search", "keep_tool", "probe_tool"]
+		}
+	],
+	"transcripts": [
+		{
+			"path": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a1101a-68f2-7656-934c-2565bf7a5ba3",
+					"timestamp": "2026-10-06T07:25:28.690Z",
+					"cwd": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace"
+				},
+				{
+					"type": "model_change",
+					"id": "3d6351e5",
+					"parentId": null,
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"provider": "runtime-probe",
+					"modelId": "offline"
+				},
+				{
+					"type": "thinking_level_change",
+					"id": "ce567706",
+					"parentId": "3d6351e5",
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"thinkingLevel": "off"
+				},
+				{
+					"type": "message",
+					"id": "04ba6c3e",
+					"parentId": "ce567706",
+					"timestamp": "2026-10-06T07:25:29.599Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "Offline tool lifecycle probe.",
+							"cwd": "<cwd>\n/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace\n</cwd>"
+						},
+						"timestamp": 1791271529599,
+						"toolsAdded": [
+							{
+								"name": "tool_search",
+								"description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search`.",
+								"parameters": {
+									"type": "object",
+									"required": ["query"],
+									"properties": {
+										"query": {
+											"type": "string",
+											"description": "Search query for deferred tools."
+										},
+										"limit": {
+											"type": "number",
+											"description": "Maximum number of tools to return. Defaults to 8."
+										}
+									}
+								}
+							},
+							{
+								"name": "keep_tool",
+								"description": "Non-deferred probe tool",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "0f32334b",
+					"parentId": "04ba6c3e",
+					"timestamp": "2026-10-06T07:25:29.600Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "baseline"
+							}
+						],
+						"timestamp": 1791271529599
+					}
+				},
+				{
+					"type": "message",
+					"id": "57d17fbd",
+					"parentId": "0f32334b",
+					"timestamp": "2026-10-06T07:25:29.611Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529604,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "1aa7792d",
+					"parentId": "57d17fbd",
+					"timestamp": "2026-10-06T07:25:29.615Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "select"
+							}
+						],
+						"timestamp": 1791271529615
+					}
+				},
+				{
+					"type": "message",
+					"id": "0158a020",
+					"parentId": "1aa7792d",
+					"timestamp": "2026-10-06T07:25:29.618Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "load-1791271529616",
+								"name": "tool_search",
+								"arguments": {
+									"query": "select:probe_tool",
+									"limit": 1
+								}
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 1791271529616,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "123db331",
+					"parentId": "0158a020",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "toolResult",
+						"toolCallId": "load-1791271529616",
+						"toolName": "tool_search",
+						"content": [
+							{
+								"type": "text",
+								"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+							}
+						],
+						"details": {
+							"loaded": ["probe_tool"]
+						},
+						"isError": false,
+						"timestamp": 1791271529622
+					}
+				},
+				{
+					"type": "message",
+					"id": "b8196cba",
+					"parentId": "123db331",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529622,
+						"toolsAdded": [
+							{
+								"name": "probe_tool",
+								"description": "Probe tool for lifecycle loadout restoration",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "fe08bba4",
+					"parentId": "b8196cba",
+					"timestamp": "2026-10-06T07:25:29.626Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529626,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "b8129655",
+					"parentId": "fe08bba4",
+					"timestamp": "2026-10-06T07:25:29.649Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529649,
+						"toolsRemoved": [
+							{
+								"name": "probe_tool"
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "1ce10182",
+					"parentId": "b8129655",
+					"timestamp": "2026-10-06T07:25:29.652Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "resume-check"
+							}
+						],
+						"timestamp": 1791271529649
+					}
+				},
+				{
+					"type": "message",
+					"id": "2ee0e8d3",
+					"parentId": "1ce10182",
+					"timestamp": "2026-10-06T07:25:29.652Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529652,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "ec74bcf8",
+					"parentId": "2ee0e8d3",
+					"timestamp": "2026-10-06T07:25:29.655Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "select"
+							}
+						],
+						"timestamp": 1791271529655
+					}
+				},
+				{
+					"type": "message",
+					"id": "4baaea47",
+					"parentId": "ec74bcf8",
+					"timestamp": "2026-10-06T07:25:29.659Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "load-1791271529659",
+								"name": "tool_search",
+								"arguments": {
+									"query": "select:probe_tool",
+									"limit": 1
+								}
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 1791271529659,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "0c4405af",
+					"parentId": "4baaea47",
+					"timestamp": "2026-10-06T07:25:29.663Z",
+					"message": {
+						"role": "toolResult",
+						"toolCallId": "load-1791271529659",
+						"toolName": "tool_search",
+						"content": [
+							{
+								"type": "text",
+								"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+							}
+						],
+						"details": {
+							"loaded": ["probe_tool"]
+						},
+						"isError": false,
+						"timestamp": 1791271529663
+					}
+				},
+				{
+					"type": "message",
+					"id": "9ac1082c",
+					"parentId": "0c4405af",
+					"timestamp": "2026-10-06T07:25:29.663Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529663,
+						"toolsAdded": [
+							{
+								"name": "probe_tool",
+								"description": "Probe tool for lifecycle loadout restoration",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "cac8561a",
+					"parentId": "9ac1082c",
+					"timestamp": "2026-10-06T07:25:29.667Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529667,
+						"thinkingLevel": "off"
+					}
+				}
+			]
+		},
+		{
+			"path": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a1101a-6cc7-7656-934c-2569fc78d8dd",
+					"timestamp": "2026-10-06T07:25:29.671Z",
+					"cwd": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace",
+					"parentSession": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"
+				},
+				{
+					"type": "model_change",
+					"id": "3d6351e5",
+					"parentId": null,
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"provider": "runtime-probe",
+					"modelId": "offline"
+				},
+				{
+					"type": "thinking_level_change",
+					"id": "ce567706",
+					"parentId": "3d6351e5",
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"thinkingLevel": "off"
+				},
+				{
+					"type": "message",
+					"id": "04ba6c3e",
+					"parentId": "ce567706",
+					"timestamp": "2026-10-06T07:25:29.599Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "Offline tool lifecycle probe.",
+							"cwd": "<cwd>\n/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace\n</cwd>"
+						},
+						"timestamp": 1791271529599,
+						"toolsAdded": [
+							{
+								"name": "tool_search",
+								"description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search`.",
+								"parameters": {
+									"type": "object",
+									"required": ["query"],
+									"properties": {
+										"query": {
+											"type": "string",
+											"description": "Search query for deferred tools."
+										},
+										"limit": {
+											"type": "number",
+											"description": "Maximum number of tools to return. Defaults to 8."
+										}
+									}
+								}
+							},
+							{
+								"name": "keep_tool",
+								"description": "Non-deferred probe tool",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "0f32334b",
+					"parentId": "04ba6c3e",
+					"timestamp": "2026-10-06T07:25:29.600Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "baseline"
+							}
+						],
+						"timestamp": 1791271529599
+					}
+				},
+				{
+					"type": "message",
+					"id": "57d17fbd",
+					"parentId": "0f32334b",
+					"timestamp": "2026-10-06T07:25:29.611Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529604,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "1aa7792d",
+					"parentId": "57d17fbd",
+					"timestamp": "2026-10-06T07:25:29.615Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "select"
+							}
+						],
+						"timestamp": 1791271529615
+					}
+				},
+				{
+					"type": "message",
+					"id": "0158a020",
+					"parentId": "1aa7792d",
+					"timestamp": "2026-10-06T07:25:29.618Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "load-1791271529616",
+								"name": "tool_search",
+								"arguments": {
+									"query": "select:probe_tool",
+									"limit": 1
+								}
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 1791271529616,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "123db331",
+					"parentId": "0158a020",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "toolResult",
+						"toolCallId": "load-1791271529616",
+						"toolName": "tool_search",
+						"content": [
+							{
+								"type": "text",
+								"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+							}
+						],
+						"details": {
+							"loaded": ["probe_tool"]
+						},
+						"isError": false,
+						"timestamp": 1791271529622
+					}
+				},
+				{
+					"type": "message",
+					"id": "b8196cba",
+					"parentId": "123db331",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529622,
+						"toolsAdded": [
+							{
+								"name": "probe_tool",
+								"description": "Probe tool for lifecycle loadout restoration",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "fe08bba4",
+					"parentId": "b8196cba",
+					"timestamp": "2026-10-06T07:25:29.626Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529626,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "e0f39476",
+					"parentId": "fe08bba4",
+					"timestamp": "2026-10-06T07:25:29.683Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529683,
+						"toolsRemoved": [
+							{
+								"name": "probe_tool"
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "200d39f1",
+					"parentId": "e0f39476",
+					"timestamp": "2026-10-06T07:25:29.686Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "fork-check"
+							}
+						],
+						"timestamp": 1791271529683
+					}
+				},
+				{
+					"type": "message",
+					"id": "0c0f9b15",
+					"parentId": "200d39f1",
+					"timestamp": "2026-10-06T07:25:29.687Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529686,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "a9833e45",
+					"parentId": "0c0f9b15",
+					"timestamp": "2026-10-06T07:25:29.689Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "select"
+							}
+						],
+						"timestamp": 1791271529689
+					}
+				},
+				{
+					"type": "message",
+					"id": "3e4c0f90",
+					"parentId": "a9833e45",
+					"timestamp": "2026-10-06T07:25:29.693Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "load-1791271529693",
+								"name": "tool_search",
+								"arguments": {
+									"query": "select:probe_tool",
+									"limit": 1
+								}
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 1791271529693,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "ee9aaa65",
+					"parentId": "3e4c0f90",
+					"timestamp": "2026-10-06T07:25:29.697Z",
+					"message": {
+						"role": "toolResult",
+						"toolCallId": "load-1791271529693",
+						"toolName": "tool_search",
+						"content": [
+							{
+								"type": "text",
+								"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+							}
+						],
+						"details": {
+							"loaded": ["probe_tool"]
+						},
+						"isError": false,
+						"timestamp": 1791271529697
+					}
+				},
+				{
+					"type": "message",
+					"id": "f1514362",
+					"parentId": "ee9aaa65",
+					"timestamp": "2026-10-06T07:25:29.697Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529697,
+						"toolsAdded": [
+							{
+								"name": "probe_tool",
+								"description": "Probe tool for lifecycle loadout restoration",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "b0561d78",
+					"parentId": "f1514362",
+					"timestamp": "2026-10-06T07:25:29.701Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529697,
+						"thinkingLevel": "off"
+					}
+				}
+			]
+		},
+		{
+			"path": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/source-before-resume.jsonl",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a1101a-68f2-7656-934c-2565bf7a5ba3",
+					"timestamp": "2026-10-06T07:25:28.690Z",
+					"cwd": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace"
+				},
+				{
+					"type": "model_change",
+					"id": "3d6351e5",
+					"parentId": null,
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"provider": "runtime-probe",
+					"modelId": "offline"
+				},
+				{
+					"type": "thinking_level_change",
+					"id": "ce567706",
+					"parentId": "3d6351e5",
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"thinkingLevel": "off"
+				},
+				{
+					"type": "message",
+					"id": "04ba6c3e",
+					"parentId": "ce567706",
+					"timestamp": "2026-10-06T07:25:29.599Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "Offline tool lifecycle probe.",
+							"cwd": "<cwd>\n/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace\n</cwd>"
+						},
+						"timestamp": 1791271529599,
+						"toolsAdded": [
+							{
+								"name": "tool_search",
+								"description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search`.",
+								"parameters": {
+									"type": "object",
+									"required": ["query"],
+									"properties": {
+										"query": {
+											"type": "string",
+											"description": "Search query for deferred tools."
+										},
+										"limit": {
+											"type": "number",
+											"description": "Maximum number of tools to return. Defaults to 8."
+										}
+									}
+								}
+							},
+							{
+								"name": "keep_tool",
+								"description": "Non-deferred probe tool",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "0f32334b",
+					"parentId": "04ba6c3e",
+					"timestamp": "2026-10-06T07:25:29.600Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "baseline"
+							}
+						],
+						"timestamp": 1791271529599
+					}
+				},
+				{
+					"type": "message",
+					"id": "57d17fbd",
+					"parentId": "0f32334b",
+					"timestamp": "2026-10-06T07:25:29.611Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529604,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "1aa7792d",
+					"parentId": "57d17fbd",
+					"timestamp": "2026-10-06T07:25:29.615Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "select"
+							}
+						],
+						"timestamp": 1791271529615
+					}
+				},
+				{
+					"type": "message",
+					"id": "0158a020",
+					"parentId": "1aa7792d",
+					"timestamp": "2026-10-06T07:25:29.618Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "load-1791271529616",
+								"name": "tool_search",
+								"arguments": {
+									"query": "select:probe_tool",
+									"limit": 1
+								}
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 1791271529616,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "123db331",
+					"parentId": "0158a020",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "toolResult",
+						"toolCallId": "load-1791271529616",
+						"toolName": "tool_search",
+						"content": [
+							{
+								"type": "text",
+								"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+							}
+						],
+						"details": {
+							"loaded": ["probe_tool"]
+						},
+						"isError": false,
+						"timestamp": 1791271529622
+					}
+				},
+				{
+					"type": "message",
+					"id": "b8196cba",
+					"parentId": "123db331",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529622,
+						"toolsAdded": [
+							{
+								"name": "probe_tool",
+								"description": "Probe tool for lifecycle loadout restoration",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "fe08bba4",
+					"parentId": "b8196cba",
+					"timestamp": "2026-10-06T07:25:29.626Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529626,
+						"thinkingLevel": "off"
+					}
+				}
+			]
+		},
+		{
+			"path": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl",
+			"entries": [
+				{
+					"type": "session",
+					"version": 3,
+					"id": "01a1101a-68f2-7656-934c-2565bf7a5ba3",
+					"timestamp": "2026-10-06T07:25:28.690Z",
+					"cwd": "/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace"
+				},
+				{
+					"type": "model_change",
+					"id": "3d6351e5",
+					"parentId": null,
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"provider": "runtime-probe",
+					"modelId": "offline"
+				},
+				{
+					"type": "thinking_level_change",
+					"id": "ce567706",
+					"parentId": "3d6351e5",
+					"timestamp": "2026-10-06T07:25:29.586Z",
+					"thinkingLevel": "off"
+				},
+				{
+					"type": "message",
+					"id": "04ba6c3e",
+					"parentId": "ce567706",
+					"timestamp": "2026-10-06T07:25:29.599Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"sections": {
+							"preamble": "Offline tool lifecycle probe.",
+							"cwd": "<cwd>\n/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/workspace\n</cwd>"
+						},
+						"timestamp": 1791271529599,
+						"toolsAdded": [
+							{
+								"name": "tool_search",
+								"description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search`.",
+								"parameters": {
+									"type": "object",
+									"required": ["query"],
+									"properties": {
+										"query": {
+											"type": "string",
+											"description": "Search query for deferred tools."
+										},
+										"limit": {
+											"type": "number",
+											"description": "Maximum number of tools to return. Defaults to 8."
+										}
+									}
+								}
+							},
+							{
+								"name": "keep_tool",
+								"description": "Non-deferred probe tool",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "0f32334b",
+					"parentId": "04ba6c3e",
+					"timestamp": "2026-10-06T07:25:29.600Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "baseline"
+							}
+						],
+						"timestamp": 1791271529599
+					}
+				},
+				{
+					"type": "message",
+					"id": "57d17fbd",
+					"parentId": "0f32334b",
+					"timestamp": "2026-10-06T07:25:29.611Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529604,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "1aa7792d",
+					"parentId": "57d17fbd",
+					"timestamp": "2026-10-06T07:25:29.615Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "select"
+							}
+						],
+						"timestamp": 1791271529615
+					}
+				},
+				{
+					"type": "message",
+					"id": "0158a020",
+					"parentId": "1aa7792d",
+					"timestamp": "2026-10-06T07:25:29.618Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "toolCall",
+								"id": "load-1791271529616",
+								"name": "tool_search",
+								"arguments": {
+									"query": "select:probe_tool",
+									"limit": 1
+								}
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "toolUse",
+						"timestamp": 1791271529616,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "123db331",
+					"parentId": "0158a020",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "toolResult",
+						"toolCallId": "load-1791271529616",
+						"toolName": "tool_search",
+						"content": [
+							{
+								"type": "text",
+								"text": "Loaded 1 tool. They are available from your next call:\n- probe_tool: Probe tool for lifecycle loadout restoration"
+							}
+						],
+						"details": {
+							"loaded": ["probe_tool"]
+						},
+						"isError": false,
+						"timestamp": 1791271529622
+					}
+				},
+				{
+					"type": "message",
+					"id": "b8196cba",
+					"parentId": "123db331",
+					"timestamp": "2026-10-06T07:25:29.622Z",
+					"message": {
+						"role": "system",
+						"content": "",
+						"timestamp": 1791271529622,
+						"toolsAdded": [
+							{
+								"name": "probe_tool",
+								"description": "Probe tool for lifecycle loadout restoration",
+								"parameters": {
+									"type": "object",
+									"properties": {},
+									"required": []
+								}
+							}
+						]
+					}
+				},
+				{
+					"type": "message",
+					"id": "fe08bba4",
+					"parentId": "b8196cba",
+					"timestamp": "2026-10-06T07:25:29.626Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529626,
+						"thinkingLevel": "off"
+					}
+				},
+				{
+					"type": "message",
+					"id": "760cffdd",
+					"parentId": "fe08bba4",
+					"timestamp": "2026-10-06T07:25:29.712Z",
+					"message": {
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": "constructor-check"
+							}
+						],
+						"timestamp": 1791271529712
+					}
+				},
+				{
+					"type": "message",
+					"id": "0ecf279b",
+					"parentId": "760cffdd",
+					"timestamp": "2026-10-06T07:25:29.716Z",
+					"message": {
+						"role": "assistant",
+						"content": [
+							{
+								"type": "text",
+								"text": "offline complete"
+							}
+						],
+						"api": "runtime-probe-api",
+						"provider": "runtime-probe",
+						"model": "offline",
+						"usage": {
+							"input": 0,
+							"output": 0,
+							"cacheRead": 0,
+							"cacheWrite": 0,
+							"totalTokens": 0,
+							"cost": {
+								"input": 0,
+								"output": 0,
+								"cacheRead": 0,
+								"cacheWrite": 0,
+								"total": 0
+							}
+						},
+						"stopReason": "stop",
+						"timestamp": 1791271529716,
+						"thinkingLevel": "off"
+					}
+				}
+			]
+		}
+	]
+}
