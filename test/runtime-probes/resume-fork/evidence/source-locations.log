@@ -1,0 +1,97 @@
+pi version 1.0.4
+=== sdk ===
+   143	        thinkingLevel = clampThinkingLevel(model, thinkingLevel);
+   144	    }
+   145	    const configuredDefaultToolNames = settingsManager.getDefaultTools();
+   146	    const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
+   147	    const excludedToolNames = options.excludeTools;
+   148	    const isExcludedTool = excludedToolNames ? createToolNameMatcher(excludedToolNames) : undefined;
+   149	    const initialActiveToolNames = (options.tools ?? (options.noTools ? [] : (configuredDefaultToolNames ?? DEFAULT_TOOL_NAMES))).filter((name) => !isExcludedTool?.(name));
+   150	    // Create convertToLlm wrapper that filters images if blockImages is enabled (defense-in-depth)
+   151	    const convertToLlmWithBlockImages = (messages) => {
+   297	        scopedModels: options.scopedModels,
+   298	        resourceLoader,
+   299	        customTools: options.customTools,
+   300	        modelRuntime,
+   301	        cacheWarmer,
+   302	        initialActiveToolNames,
+   303	        usesDefaultTools: options.tools === undefined && !options.noTools,
+   304	        allowedToolNames,
+   305	        excludedToolNames,
+   306	        extensionRunnerRef,
+   307	        sessionStartEvent: options.sessionStartEvent,
+   308	    });
+   309	    const extensionsResult = resourceLoader.getExtensions();
+=== constructor ===
+   203	        this._installAgentNextTurnRefresh();
+   204	        this._installAgentRequestProjection();
+   205	        this._installAgentBoundaryHooks();
+   206	        this._installHiddenDeclarationsProjection();
+   207	        this._installAgentForcedPromptProjection();
+   208	        this._buildRuntime({
+   209	            activeToolNames: this._initialActiveToolNames,
+   210	            includeAllExtensionTools: true,
+   211	        });
+   212	        if (this._initialActiveToolNames === undefined)
+   213	            this._restoreToolsFromTranscript();
+   214	    }
+  1360	     * Restore the active tool loadout declared by the session transcript, if it declares one.
+  1361	     * Tools reachable only from other tools are never declared, but they do not depend on the active
+  1362	     * set, so the transcript's declarations are the whole loadout.
+  1363	     */
+  1364	    _restoreToolsFromTranscript() {
+  1365	        this._pendingToolNames.clear();
+  1366	        const current = getCurrentSystemMessage(this.sessionManager.buildSessionContext().messages);
+  1367	        if (!current)
+  1368	            return;
+  1369	        const names = (current.toolsAdded ?? []).map((tool) => tool.name);
+  1370	        this._pendingToolNames = new Set(names.filter((name) => this._isAllowedTool(name)));
+  1371	        this._setActiveTools(names);
+  1372	    }
+  1373	    // =========================================================================
+  1374	    // Prompting
+=== builtin claim ===
+     1	/**
+     2	 * Tool discovery: a BM25 ranker over tool metadata, shared by `searchTools()` in codemode scripts and
+     3	 * the optional `tool_search` tool.
+     4	 *
+     5	 * `tool_search` searches tools that are not declared to
+     6	 * the model (`codemode` and `deferred` exposure) and loads the matches, so they are declared for the
+     7	 * next model call. Loading goes through the active tool set, so it is recorded in the transcript
+     8	 * like any other tool change and survives `/tree`, resume, and fork on that branch.
+     9	 */
+    10	import { Type } from "typebox";
+=== repo ===
+    30		const getDeferredNames = () => {
+    31			const registered = new Set(pi.getAllTools().map((candidate: { name: string }) => candidate.name));
+    32			return deferredTools.filter((name) => registered.has(name));
+    33		};
+    34		const tool = createToolSearchTool(directScope, getDeferredNames);
+    35		pi.registerTool(tool);
+    36		pi.on("session_start", () => {
+    37			const activeTools = pi.getActiveTools();
+    38			const active = new Set(activeTools);
+    39			directTools = pi
+    40				.getAllTools()
+    41				.filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
+    42			directScope.setActive(
+    43				directScope
+    44					.tools()
+    45					.map((candidate: { name: string }) => candidate.name)
+    46					.filter((name: string) => !deferredSet.has(name)),
+    47			);
+    48		});
+    49		// Other extensions re-activate deferred tools after session_start (e.g.
+    50		// pi-goal-x installs its tool profile on every before_agent_start), so the
+    51		// defer decision is re-asserted each turn. Tools activated via tool_search
+    52		// stay active for the session. Only deferred names are touched; the rest of
+    53		// the active set (user toggles) is preserved as-is. The same hook advertises
+    54		// the deferred names so the model knows what select: can load. `sections` is
+    55		// typed optional because pi 0.84 (the pinned dev dependency) predates it.
+    56		pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
+    57			const active = pi.getActiveTools();
+    58			const next = active.filter((name: string) => !deferredSet.has(name) || activatedBySearch.has(name));
+    59			const changed = next.length !== active.length;
+    60			if (changed) pi.setActiveTools(next);
+    61			const sections = (event.systemPromptOptions as { sections?: Record<string, string> }).sections;
+    62			if (!sections) return;

@@ -1,0 +1,5 @@
+{"scenario":"fresh","activeAtStart":["tool_search","keep_tool"],"beforeAgentStart":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool","probe_tool"]}
+{"scenario":"fork","activeAtStart":["tool_search","keep_tool"],"beforeAgentStart":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"]}
+{"scenario":"resume","activeAtStart":["tool_search","keep_tool"],"beforeAgentStart":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"]}
+PASS CLI builtin fresh/select, startup --fork and --session reset loaded tool; simulated provider only
+Evidence /Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/cli-builtin-qv2npv

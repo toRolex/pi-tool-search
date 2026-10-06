@@ -1,0 +1,33 @@
+{"scenario":"fresh.session_start","active":["tool_search","keep_tool"],"persisted":[],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"}
+{"scenario":"fresh.before_select","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"}
+{"scenario":"fresh.after_select","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"}
+{"scenario":"new.session_start","active":["tool_search","keep_tool"],"persisted":[],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-630Z_01a1101a-6c9e-7656-934c-25660c459dd2.jsonl"}
+{"scenario":"resume.session_start","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"}
+{"scenario":"resume.after_prompt","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"}
+{"scenario":"resume.after_reselect","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-28-690Z_01a1101a-68f2-7656-934c-2565bf7a5ba3.jsonl"}
+{"scenario":"fork.session_start","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl"}
+{"scenario":"fork.after_prompt","active":["tool_search","keep_tool"],"persisted":["tool_search","keep_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl"}
+{"scenario":"fork.after_reselect","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/sessions/2026-10-06T07-25-29-671Z_01a1101a-6cc7-7656-934c-2569fc78d8dd.jsonl"}
+{"scenario":"constructor.omitted_initial.before_bind","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl"}
+{"scenario":"constructor.omitted_initial.after_bind","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl"}
+{"scenario":"constructor.omitted_initial.after_prompt","active":["tool_search","keep_tool","probe_tool"],"persisted":["tool_search","keep_tool","probe_tool"],"sessionFile":"/Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy/constructor-control.jsonl"}
+Evidence /Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/evidence/builtin-restoration-DnrGLy
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: resume must restore the loaded tool before session_start
+
+false !== true
+
+    at file:///Users/rolex/Documents/Codes/githubProject/MyProject/pi-tool-search/test/runtime-probes/resume-fork/probe.mjs:197:9 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.2
+EXIT_CODE=1
