@@ -74,7 +74,7 @@ const migrationFileSystem: MigrationFileSystem = {
 
 export interface DeferredConfigFileSystem {
 	read(path: string): string;
-	/** Commit atomically only if the latest source still matches; undefined means absent. */
+	/** Check source immediately before atomic commit; undefined means absent. Not a cross-process CAS. */
 	write(path: string, source: string, expectedSource: string | undefined): void;
 }
 
@@ -98,60 +98,229 @@ export const deferredConfigFileSystem: DeferredConfigFileSystem = {
 	},
 };
 
-/** #14 supports the canonical single-line array only; richer safe editing belongs to #15. */
+type SourceToken = { start: number; end: number; text: string; kind: "string" | "comment" | "syntax" };
+
+function unsafeLayout(): Error {
+	return new Error("Cannot safely edit tools.deferred in this TOML layout; fix the config and retry /tools.");
+}
+
+/** Lex only after full TOML validation. Strings/comments are opaque, including fake assignments. */
+function sourceTokens(source: string): SourceToken[] {
+	const tokens: SourceToken[] = [];
+	let index = 0;
+	while (index < source.length) {
+		if (/[ \t\r]/.test(source[index])) {
+			index++;
+			continue;
+		}
+		const start = index;
+		const char = source[index++];
+		let kind: SourceToken["kind"] = "syntax";
+		if (char === "#") {
+			kind = "comment";
+			while (index < source.length && source[index] !== "\n" && source[index] !== "\r") index++;
+		} else if (char === '"' || char === "'") {
+			kind = "string";
+			const triple = source.slice(start, start + 3) === char.repeat(3);
+			if (triple) index = start + 3;
+			let closed = false;
+			while (index < source.length) {
+				if (source[index] === "\\" && char === '"') {
+					index += 2;
+					continue;
+				}
+				if (source[index] === char) {
+					if (!triple) {
+						index++;
+						closed = true;
+						break;
+					}
+					let end = index;
+					while (source[end] === char) end++;
+					if (end - index >= 3) {
+						index = end;
+						closed = true;
+						break;
+					}
+					index = end;
+				} else index++;
+			}
+			if (!closed) throw unsafeLayout();
+		} else if (!"\n[]{}=,.".includes(char)) {
+			while (index < source.length && !/[\s[\]{}=,.#"']/.test(source[index])) index++;
+		}
+		tokens.push({ start, end: index, text: source.slice(start, index), kind });
+	}
+	return tokens;
+}
+
+function tomlString(value: string): string {
+	return stringify({ name: value })
+		.trim()
+		.replace(/^name\s*=\s*/, "");
+}
+
+function editArray(source: string, tokens: SourceToken[], names: string[]): string {
+	const start = tokens[0].start;
+	const end = tokens.at(-1)!.end;
+	if (!tokens.some((token) => token.kind === "comment")) {
+		return source.slice(0, start) + `[${names.map(tomlString).join(", ")}]` + source.slice(end);
+	}
+	const remaining = new Set(names);
+	const elements = tokens.filter((token) => token.kind === "string");
+	const kept = elements.filter((token) => {
+		const value = parse(`value = ${token.text}`).value as string;
+		if (!remaining.has(value)) return false;
+		remaining.delete(value);
+		return true;
+	});
+	const added = [...remaining];
+	const keptTokens = new Set(kept);
+	const edits = tokens
+		.filter((token) => token.text === "," || (token.kind === "string" && !keptTokens.has(token)))
+		.map((token) => ({ start: token.start, end: token.end, text: "" }));
+	for (let index = 0; index < kept.length; index++) {
+		if (index < kept.length - 1 || added.length)
+			edits.push({ start: kept[index].end, end: kept[index].end, text: "," });
+	}
+	if (added.length) edits.push({ start: end - 1, end: end - 1, text: added.map(tomlString).join(", ") });
+	let result = source;
+	for (const edit of edits.sort((a, b) => b.start - a.start))
+		result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+	return result;
+}
+
+function locatePolicy(tokens: SourceToken[]) {
+	let cursor = 0;
+	let table: string[] = [];
+	let range: SourceToken[] | undefined;
+	let toolsHeaderEnd: number | undefined;
+	let rootEnd: number | undefined;
+	let inlineTools: SourceToken[] | undefined;
+	const isPath = (path: string[], expected: string[]) => JSON.stringify(path) === JSON.stringify(expected);
+	const skip = () => {
+		while (tokens[cursor]?.kind === "comment" || tokens[cursor]?.text === "\n") cursor++;
+	};
+	const key = () => {
+		const path: string[] = [];
+		do {
+			const token = tokens[cursor++];
+			if (!token) throw unsafeLayout();
+			path.push(token.kind === "string" ? (parse(`value = ${token.text}`).value as string) : token.text);
+			if (tokens[cursor]?.text !== ".") break;
+			cursor++;
+		} while (cursor < tokens.length);
+		return path;
+	};
+	const value = (path: string[]): void => {
+		const start = cursor;
+		const token = tokens[cursor++];
+		if (!token) throw unsafeLayout();
+		if (token.text === "{") {
+			skip();
+			while (tokens[cursor]?.text !== "}") {
+				const child = [...path, ...key()];
+				if (tokens[cursor++]?.text !== "=") throw unsafeLayout();
+				value(child);
+				skip();
+				if (tokens[cursor]?.text !== ",") break;
+				cursor++;
+				skip();
+			}
+			if (tokens[cursor++]?.text !== "}") throw unsafeLayout();
+			if (isPath(path, ["tools"])) inlineTools = tokens.slice(start, cursor);
+		} else if (token.text === "[") {
+			let depth = 1;
+			while (cursor < tokens.length && depth) {
+				const next = tokens[cursor++];
+				if (next.kind !== "syntax") continue;
+				if (next.text === "[") depth++;
+				if (next.text === "]") depth--;
+			}
+			if (depth) throw unsafeLayout();
+		} else {
+			while (
+				cursor < tokens.length &&
+				tokens[cursor].kind !== "comment" &&
+				!["\n", ",", "}"].includes(tokens[cursor].text)
+			)
+				cursor++;
+		}
+		if (isPath(path, ["tools", "deferred"])) {
+			if (range || token.text !== "[") throw unsafeLayout();
+			range = tokens.slice(start, cursor);
+		}
+	};
+	while (cursor < tokens.length) {
+		skip();
+		if (cursor === tokens.length) break;
+		if (tokens[cursor]?.text === "[") {
+			rootEnd ??= tokens[cursor].start;
+			cursor++;
+			const arrayTable = tokens[cursor]?.text === "[";
+			if (arrayTable) cursor++;
+			table = key();
+			if (tokens[cursor++]?.text !== "]" || (arrayTable && tokens[cursor++]?.text !== "]")) throw unsafeLayout();
+			// Array-table members never denote the singleton tools policy table.
+			if (arrayTable) table.push("[]");
+			if (isPath(table, ["tools"])) {
+				let end = cursor;
+				if (tokens[end]?.kind === "comment") end++;
+				toolsHeaderEnd = tokens[end]?.text === "\n" ? tokens[end].end : tokens[end - 1].end;
+			}
+			skip();
+		} else {
+			const path = [...table, ...key()];
+			if (tokens[cursor++]?.text !== "=") throw unsafeLayout();
+			value(path);
+			skip();
+		}
+	}
+	return { range, toolsHeaderEnd, rootEnd, inlineTools };
+}
+
 export function patchDeferredTool(source: string, name: string, deferred: boolean): string {
 	const document = parse(source) as { tools?: { deferred?: unknown } };
-	const value = document.tools?.deferred;
-	const unsupported = () =>
-		new Error("Unsupported tool-search.toml layout: use [tools] with a single-line deferred string array.");
-	if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string" && entry.length > 0)) {
-		throw unsupported();
-	}
-	// Multiline strings can contain fake headers/assignments; never regex-edit those documents.
-	if (source.includes('"""') || source.includes("'''")) throw unsupported();
-	let inTools = false;
-	let offset = 0;
-	let range: { start: number; end: number } | undefined;
-	for (const line of source.split(/(?<=\n)/)) {
-		if (/^\s*\[/.test(line)) inTools = /^\s*\[tools\]\s*(?:#.*)?(?:\r?\n)?$/.test(line);
-		if (inTools) {
-			const assignment = /^[ \t]*deferred[ \t]*=[ \t]*\[/.exec(line);
-			if (assignment) {
-				const start = assignment[0].length - 1;
-				let quote = "";
-				let end = -1;
-				for (let index = start + 1; index < line.length; index++) {
-					const char = line[index];
-					if (quote) {
-						if (char === "\\" && quote === '"') index++;
-						else if (char === quote) quote = "";
-					} else if (char === '"' || char === "'") quote = char;
-					else if (char === "]") {
-						end = index + 1;
-						break;
-					} else if (char === "#" || char === "\n" || char === "\r" || char === "[") throw unsupported();
-				}
-				if (end < 0 || !/^[ \t]*(?:#.*)?(?:\r?\n)?$/.test(line.slice(end))) throw unsupported();
-				const isolated = parse(`value = ${line.slice(start, end)}`).value;
-				if (JSON.stringify(isolated) !== JSON.stringify(value)) throw unsupported();
-				range = { start: offset + start, end: offset + end };
-			}
-		}
-		offset += line.length;
-	}
-	if (!range) throw unsupported();
-	const names = [...new Set(value as string[])].filter((entry) => deferred || entry !== name);
+	const tools = document.tools;
+	if (tools !== undefined && (typeof tools !== "object" || tools === null || Array.isArray(tools)))
+		throw unsafeLayout();
+	const value = tools?.deferred;
+	if (
+		value !== undefined &&
+		(!Array.isArray(value) || !value.every((entry) => typeof entry === "string" && entry.length > 0))
+	)
+		throw unsafeLayout();
+	const names = [...new Set((value ?? []) as string[])].filter((entry) => deferred || entry !== name);
 	if (deferred && !names.includes(name)) names.push(name);
-	if (JSON.stringify(names) === JSON.stringify(value)) return source;
-	const serialized = `[${names
-		.map((entry) =>
-			stringify({ name: entry })
-				.trim()
-				.replace(/^name\s*=\s*/, ""),
+	if (JSON.stringify(names) === JSON.stringify(value ?? [])) return source;
+	const { range, toolsHeaderEnd, rootEnd, inlineTools } = locatePolicy(sourceTokens(source));
+	let next: string;
+	if (value !== undefined) {
+		if (
+			!range ||
+			JSON.stringify(parse(`value = ${source.slice(range[0].start, range.at(-1)!.end)}`).value) !==
+				JSON.stringify(value)
 		)
-		.join(", ")}]`;
-	const next = source.slice(0, range.start) + serialized + source.slice(range.end);
-	parse(next);
+			throw unsafeLayout();
+		next = editArray(source, range, names);
+	} else {
+		const array = `[${names.map(tomlString).join(", ")}]`;
+		const newline = source.includes("\r\n") ? "\r\n" : "\n";
+		let position: number;
+		let insertion: string;
+		if (inlineTools) {
+			position = inlineTools.at(-1)!.start;
+			const significant = inlineTools.slice(1, -1).filter((token) => token.kind !== "comment" && token.text !== "\n");
+			insertion = `${significant.length && significant.at(-1)!.text !== "," ? ", " : ""}deferred = ${array}`;
+		} else {
+			position = toolsHeaderEnd ?? (tools ? (rootEnd ?? source.length) : source.length);
+			const separator = position > 0 && source[position - 1] !== "\n" ? newline : "";
+			const key = tools && toolsHeaderEnd === undefined ? "tools.deferred" : "deferred";
+			insertion = `${separator}${tools === undefined ? `[tools]${newline}` : ""}${key} = ${array}${newline}`;
+		}
+		next = source.slice(0, position) + insertion + source.slice(position);
+	}
+	if (JSON.stringify(parseDeferredTools(next)) !== JSON.stringify(names)) throw unsafeLayout();
 	return next;
 }
 

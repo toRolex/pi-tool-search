@@ -87,14 +87,20 @@ Only tools assigned while active and direct at session start are editable.
 are not listed or taken over. This first panel is not a global registered-tool
 catalog. Other active tools are preserved by a toggle.
 
-The minimal writer supports a canonical single-line array under `[tools]`, or
-creates a missing file with an example comment. It preserves all bytes outside
-the array and all unregistered names. Missing keys/tables, multiline arrays or
-strings, quoted/dotted/inline layouts and malformed input are explicitly rejected.
-Every selection rereads the file and changes only the selected tool's membership.
-Observed conflicting edits are rejected, not overwritten. Parse/write errors
-leave the file, policy, active set and display unchanged. Non-TUI modes report
-an error instead of opening the panel.
+The writer safely locates single/multiline string arrays through literal,
+quoted/escaped/dotted keys and inline tables, even with multiline strings elsewhere.
+All bytes outside an existing array and all comments, including inside it, are
+preserved; unregistered names remain. Comment-bearing arrays retain whitespace
+while elements/commas change; arrays without internal comments may be normalized.
+Missing files get an example comment; missing keys/tables are inserted without
+rewriting existing content. Non-string/empty entries, malformed TOML or layouts
+that cannot be safely located are explicitly rejected rather than overwritten.
+Every selection rereads disk and changes only the selected tool's membership.
+Observed conflicts are checked immediately before atomic commit and rejected.
+A non-cooperating writer may still race between this check and rename; there is
+no unconditional cross-process transaction. Parse/staging/rename failures leave
+the original file, policy, active set and display unchanged; repair the cause and
+retry. Non-TUI modes report an error instead of opening the panel.
 
 Pi's official example `tools.ts` also registers `/tools`, but writes session-only
 enable/disable entries. Do not load both same-named commands. This fork only
