@@ -1,6 +1,7 @@
 import { dirname, join } from "node:path";
 import type { BeforeAgentStartEvent, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { migrateDeferredTools } from "./config.ts";
+import { migrateDeferredTools, readDeferredTools, setDeferredTool, type DeferredConfigFileSystem } from "./config.ts";
+import { registerToolsPanel } from "./tools-panel.ts";
 import { createToolSearchTool } from "./tools/tool-search/definition.ts";
 import { DEFERRED_SECTION_KEY, renderDeferredSection } from "./tools/tool-search/select.ts";
 
@@ -8,11 +9,16 @@ export default function toolSearchExtension(pi: ExtensionAPI): void {
 	createToolSearchExtension(pi, `${process.env.HOME}/.pi/agent/tool-search.toml`);
 }
 
-export function createToolSearchExtension(pi: ExtensionAPI, configPath: string): void {
+export function createToolSearchExtension(pi: ExtensionAPI, configPath: string, fs?: DeferredConfigFileSystem): void {
 	// Migration must finish (including retryable cleanup) before taking the session snapshot.
-	const deferredTools = migrateDeferredTools(configPath, join(dirname(configPath), "xsettings.toml"));
-	const deferredSet = new Set(deferredTools);
+	let deferredTools = migrateDeferredTools(configPath, join(dirname(configPath), "xsettings.toml"));
+	let deferredSet = new Set(deferredTools);
+	const updatePolicy = (names: string[]) => {
+		deferredTools = names;
+		deferredSet = new Set(names);
+	};
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
+	let scopeAssigned = false;
 	const activatedBySearch = new Set<string>();
 	const directScope = {
 		tools: () => directTools,
@@ -21,7 +27,8 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 			return pi.getActiveTools().filter((name: string) => assigned.has(name));
 		},
 		setActive: (names: readonly string[]) => {
-			for (const name of names) activatedBySearch.add(name);
+			const previouslyActive = new Set(pi.getActiveTools());
+			for (const name of names) if (!previouslyActive.has(name)) activatedBySearch.add(name);
 			const assigned = new Set(directTools.map((candidate: { name: string }) => candidate.name));
 			pi.setActiveTools([...pi.getActiveTools().filter((name: string) => !assigned.has(name)), ...names]);
 		},
@@ -33,18 +40,69 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	};
 	const tool = createToolSearchTool(directScope, getDeferredNames);
 	pi.registerTool(tool);
-	pi.on("session_start", () => {
+	registerToolsPanel(pi, {
+		tools: () => {
+			const assigned = new Set(directTools.map((candidate) => candidate.name));
+			const active = new Set(pi.getActiveTools());
+			return pi.getAllTools().map((candidate: { name: string; exposure?: unknown }) => {
+				const exposure = typeof candidate.exposure === "string" ? candidate.exposure : undefined;
+				let readOnlyReason: string | undefined;
+				if (candidate.name === tool.name) {
+					readOnlyReason = "Tool Search stays available; its own policy cannot be changed.";
+				} else if (!assigned.has(candidate.name)) {
+					readOnlyReason =
+						exposure && exposure !== "direct"
+							? `Host exposure: ${exposure}; outside current assigned scope.`
+							: "Outside current assigned scope.";
+				}
+				return {
+					name: candidate.name,
+					observedState: `${exposure ? `host ${exposure} · ` : ""}${active.has(candidate.name) ? "active" : "inactive"}`,
+					readOnlyReason,
+				};
+			});
+		},
+		refresh: () => {
+			updatePolicy(readDeferredTools(configPath));
+			return deferredTools;
+		},
+		setDeferred(name, deferred) {
+			if (name === tool.name || !directTools.some((candidate) => candidate.name === name)) {
+				throw new Error(`Tool ${name} is not in the assigned direct scope.`);
+			}
+			const names = setDeferredTool(configPath, name, deferred, fs);
+			updatePolicy(names);
+			activatedBySearch.delete(name);
+			const active = pi.getActiveTools();
+			pi.setActiveTools(deferred ? active.filter((entry) => entry !== name) : [...new Set([...active, name])]);
+			return names;
+		},
+	});
+	pi.on("session_start", (_event, ctx) => {
+		try {
+			updatePolicy(readDeferredTools(configPath));
+		} catch (error) {
+			ctx.ui.notify(`Cannot initialize Tool Search: ${String(error)}`, "error");
+			return;
+		}
 		const activeTools = pi.getActiveTools();
 		const active = new Set(activeTools);
-		directTools = pi
-			.getAllTools()
-			.filter((candidate: { name: string }) => candidate.name !== tool.name && active.has(candidate.name));
-		directScope.setActive(
-			directScope
-				.tools()
-				.map((candidate: { name: string }) => candidate.name)
-				.filter((name: string) => !deferredSet.has(name)),
-		);
+		activatedBySearch.clear();
+		// Assignment belongs to this extension instance, not the already-pruned
+		// loadout. Even an empty initial scope must not be recaptured later.
+		if (!scopeAssigned) {
+			directTools = pi
+				.getAllTools()
+				.filter(
+					(candidate: { name: string; exposure?: unknown }) =>
+						candidate.name !== tool.name &&
+						active.has(candidate.name) &&
+						(candidate.exposure === undefined || candidate.exposure === "direct"),
+				);
+			scopeAssigned = true;
+		}
+		const assigned = new Set(directTools.map((candidate) => candidate.name));
+		pi.setActiveTools(activeTools.filter((name) => !assigned.has(name) || !deferredSet.has(name)));
 	});
 	// Other extensions re-activate deferred tools after session_start (e.g.
 	// pi-goal-x installs its tool profile on every before_agent_start), so the
@@ -55,7 +113,10 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 	// typed optional because pi 0.84 (the pinned dev dependency) predates it.
 	pi.on("before_agent_start", (event: BeforeAgentStartEvent) => {
 		const active = pi.getActiveTools();
-		const next = active.filter((name: string) => !deferredSet.has(name) || activatedBySearch.has(name));
+		const assigned = new Set(directTools.map((candidate) => candidate.name));
+		const next = active.filter(
+			(name: string) => !assigned.has(name) || !deferredSet.has(name) || activatedBySearch.has(name),
+		);
 		const changed = next.length !== active.length;
 		if (changed) pi.setActiveTools(next);
 		const sections = (event.systemPromptOptions as { sections?: Record<string, string> }).sections;
@@ -63,8 +124,7 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string):
 		// A tool counts as loaded when it is in pi's active set, whatever activated it
 		// (tool_search or user toggles); activatedBySearch only protects against pruning.
 		const loaded = new Set(changed ? pi.getActiveTools() : active);
-		const scopeNames = new Set(directTools.map((candidate: { name: string }) => candidate.name));
-		const pending = getDeferredNames().filter((name) => scopeNames.has(name) && !loaded.has(name));
+		const pending = getDeferredNames().filter((name) => assigned.has(name) && !loaded.has(name));
 		const section = renderDeferredSection(pending);
 		if (section === undefined) delete sections[DEFERRED_SECTION_KEY];
 		else sections[DEFERRED_SECTION_KEY] = section;

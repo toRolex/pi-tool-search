@@ -1,12 +1,27 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { parse } from "smol-toml";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import { createToolSearchExtension } from "../src/extension.ts";
 import { ensureXSettingsRegistry } from "../../pi-xsettings/src/protocol/settings.ts";
-import { migrateDeferredTools, parseDeferredTools, readDeferredTools } from "../src/config.ts";
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import {
+	migrateDeferredTools,
+	parseDeferredTools,
+	readDeferredTools,
+	setDeferredTool,
+	deferredConfigFileSystem,
+	type DeferredConfigFileSystem,
+} from "../src/config.ts";
+import {
+	initTheme,
+	getSettingsListTheme,
+	type ExtensionAPI,
+	type ExtensionCommandContext,
+	type RegisteredCommand,
+	type Theme,
+} from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
 import { configureTuiAppearance, DEFAULT_TUI_APPEARANCE, icon } from "@luan.sh/pi-libtui";
 import toolSearchExtension from "../src/extension.ts";
 import { searchTools, type ToolMetadata } from "../src/search.ts";
@@ -88,6 +103,186 @@ describe("extension manifest", () => {
 		const manifest = JSON.parse(readFileSync(resolve(import.meta.dir, "../../../package.json"), "utf8"));
 		expect(manifest.pi.extensions).toEqual(["./packages/pi-tool-search/src/extension.ts"]);
 		expect(manifest.pi.extensions).toHaveLength(1);
+	});
+});
+
+describe("persistent deferred editing", () => {
+	test("missing file creates a minimal config, duplicates collapse and no-op saves preserve bytes", () => {
+		expect(setDeferredTool(configPath, "weather", true)).toEqual(["weather"]);
+		expect(readFileSync(configPath, "utf8")).toBe(
+			'# Tools listed here are deferred, not disabled.\n[tools]\ndeferred = ["weather"]\n',
+		);
+		writeFileSync(configPath, '[tools]\ndeferred = [ "unknown", "unknown", "weather" ] # keep');
+		setDeferredTool(configPath, "weather", true);
+		expect(readFileSync(configPath, "utf8")).toBe('[tools]\ndeferred = ["unknown", "weather"] # keep');
+		writeFileSync(configPath, '[tools]\ndeferred = [ "unknown", "weather" ] # keep');
+		expect(
+			setDeferredTool(configPath, "weather", true, {
+				read: deferredConfigFileSystem.read,
+				write() {
+					throw new Error("no-op must not write");
+				},
+			}),
+		).toEqual(["unknown", "weather"]);
+		expect(readFileSync(configPath, "utf8")).toBe('[tools]\ndeferred = [ "unknown", "weather" ] # keep');
+	});
+
+	for (const source of [
+		'tools = "scalar"\n',
+		'[[tools]]\ndeferred = ["weather"]\n',
+		'tools = ["weather"]\n',
+		'[tools]\ndeferred = "weather"\n',
+		'[tools]\ndeferred = [""]\n',
+		'[tools]\ndeferred = ["weather", 7]\n',
+		'[tools]\ndeferred = ["weather"\n',
+	]) {
+		test(`unsupported or invalid config is never changed: ${JSON.stringify(source)}`, () => {
+			writeFileSync(configPath, source);
+			expect(() => setDeferredTool(configPath, "issues", true)).toThrow();
+			expect(readFileSync(configPath, "utf8")).toBe(source);
+		});
+	}
+
+	for (const missing of [false, true]) {
+		test(`atomic commit refuses an external edit or creation (missing: ${missing})`, () => {
+			if (!missing) configure(["weather"]);
+			const external = '[tools]\ndeferred = ["external"] # external edit\n';
+			expect(() =>
+				setDeferredTool(configPath, "issues", true, {
+					read(path) {
+						try {
+							return readFileSync(path, "utf8");
+						} finally {
+							writeFileSync(path, external);
+						}
+					},
+					write: deferredConfigFileSystem.write,
+				}),
+			).toThrow("changed while saving");
+			expect(readFileSync(configPath, "utf8")).toBe(external);
+		});
+	}
+
+	test("failed staging never creates a partial authoritative file", () => {
+		const missingParent = join(configDir, "missing", "tool-search.toml");
+		expect(() => setDeferredTool(missingParent, "weather", true)).toThrow();
+		expect(existsSync(missingParent)).toBe(false);
+	});
+
+	test("editing preserves suffix comment bytes and special tool-name values", () => {
+		writeFileSync(configPath, "[tools]\ndeferred = [\"unknown#]\", 'literal]'] # [leave this]\n");
+		setDeferredTool(configPath, 'weather"\\', true);
+		expect(readFileSync(configPath, "utf8")).toBe(
+			'[tools]\ndeferred = ["unknown#]", "literal]", "weather\\"\\\\"] # [leave this]\n',
+		);
+	});
+	test("hide/show replaces only the canonical array and preserves unregistered names", () => {
+		const prefix = "# keep 注释\r\n[other]\r\nvalue = 7\r\n\r\n[tools]\r\n  deferred = ";
+		const suffix = ' # keep suffix\r\n\r\n[after]\r\nvalue = "unchanged"';
+		writeFileSync(configPath, `${prefix}["unknown"]${suffix}`);
+		expect(setDeferredTool(configPath, "weather", true)).toEqual(["unknown", "weather"]);
+		expect(readFileSync(configPath, "utf8")).toBe(`${prefix}["unknown", "weather"]${suffix}`);
+		expect(setDeferredTool(configPath, "weather", true)).toEqual(["unknown", "weather"]);
+		expect(setDeferredTool(configPath, "weather", false)).toEqual(["unknown"]);
+		expect(readFileSync(configPath, "utf8")).toBe(`${prefix}["unknown"]${suffix}`);
+	});
+});
+
+describe("#15 handwritten TOML editing", () => {
+	test("real atomic staging/rename failures preserve the original bytes and clean temporary files", () => {
+		const source = '[tools]\ndeferred = [\n # keep\n "unknown",\n]\n';
+		for (const operation of ["writeFileSync", "fsyncSync", "renameSync"]) {
+			writeFileSync(configPath, source);
+			// A separate Bun process keeps low-level fs fault injection out of every other test.
+			const script = `import {mock} from "bun:test";
+				import * as fs from "node:fs";
+				const actual = {...fs};
+				mock.module("node:fs", () => ({...actual, ${operation}() { throw new Error("injected ${operation}"); }}));
+				const {setDeferredTool} = await import(${JSON.stringify(resolve(import.meta.dir, "../src/config.ts"))});
+				try { setDeferredTool(${JSON.stringify(configPath)}, "weather", true); process.exit(2); }
+				catch (error) { console.log(String(error)); }`;
+			const result = Bun.spawnSync([process.execPath, "-e", script]);
+			expect(result.exitCode).toBe(0);
+			expect(result.stdout.toString()).toContain(`injected ${operation}`);
+			expect(readFileSync(configPath, "utf8")).toBe(source);
+			expect(readdirSync(configDir)).toEqual(["tool-search.toml"]);
+			setDeferredTool(configPath, "weather", true);
+			expect(readDeferredTools(configPath)).toEqual(["unknown", "weather"]);
+		}
+	});
+	test("missing inline keys retain TOML 1.1 comments and trailing commas", () => {
+		for (const [source, expected] of [
+			["tools={other=7,}", 'tools={other=7,deferred = ["weather"]}'],
+			["tools={\n# c\nother=7,\n}", 'tools={\n# c\nother=7,\ndeferred = ["weather"]}'],
+			["tools={# c\n}", 'tools={# c\ndeferred = ["weather"]}'],
+			["tools = {\n other = 7 # keep\n}", 'tools = {\n other = 7 # keep\n, deferred = ["weather"]}'],
+			["tools.other = 7 # keep", 'tools.other = 7 # keep\ntools.deferred = ["weather"]\n'],
+		]) {
+			writeFileSync(configPath, source);
+			expect(setDeferredTool(configPath, "weather", true)).toEqual(["weather"]);
+			expect(readFileSync(configPath, "utf8")).toBe(expected);
+		}
+	});
+	test("comments survive duplicate removal, empty arrays, multiline escaped strings and repeated toggles", () => {
+		const source = `[tools]\ndeferred = [\n # first\n """wea\\\n   ther""", # one\n 'unknown', # two\n 'unknown', # duplicate\n 'weather', # last\n]\n`;
+		writeFileSync(configPath, source);
+		expect(setDeferredTool(configPath, "weather", true)).toEqual(["weather", "unknown"]);
+		const deduplicated = readFileSync(configPath, "utf8");
+		expect(deduplicated).toBe(
+			`[tools]\ndeferred = [\n # first\n """wea\\\n   ther""", # one\n 'unknown' # two\n  # duplicate\n  # last\n]\n`,
+		);
+		setDeferredTool(configPath, "weather", true);
+		expect(readFileSync(configPath, "utf8")).toBe(deduplicated);
+		setDeferredTool(configPath, "weather", false);
+		setDeferredTool(configPath, "unknown", false);
+		expect(readDeferredTools(configPath)).toEqual([]);
+		for (const comment of ["# first", "# one", "# two", "# duplicate", "# last"])
+			expect(readFileSync(configPath, "utf8")).toContain(comment);
+		setDeferredTool(configPath, "weather", true);
+		expect(readDeferredTools(configPath)).toEqual(["weather"]);
+	});
+	test("quoted, escaped, dotted and inline keys locate only the semantic policy array", () => {
+		for (const [prefix, array, suffix] of [
+			["\"tools\" . 'deferred' = ", '["unknown"]', " # suffix\n"],
+			['["too\\u006cs"]\n"defer\\u0072ed" = ', "['unknown']", "\n"],
+			['tools = { other = { deferred = ["decoy"] }, "deferred" = ', '["unknown"]', ", keep = 7 }\n"],
+			['tools = { "deferred" = ', "[\"\"\"unknown\"\"\", '''literal]#''']", " }\n"],
+			["[other]\ndeferred = [\"decoy\"]\n[tools]\n'deferred' = ", "[]", '\n[[after]]\nname = "x"\n'],
+		]) {
+			writeFileSync(configPath, prefix + array + suffix);
+			setDeferredTool(configPath, "weather\x00\t😀", true);
+			expect(readFileSync(configPath, "utf8")).toBe(
+				prefix +
+					(array === "[]"
+						? '["weather\\u0000\\t😀"]'
+						: array.includes("literal")
+							? '["unknown", "literal]#", "weather\\u0000\\t😀"]'
+							: '["unknown", "weather\\u0000\\t😀"]') +
+					suffix,
+			);
+			expect(readDeferredTools(configPath)).toContain("weather\x00\t😀");
+		}
+	});
+	test("multiline array preserves internal comments, literal strings and all outside bytes", () => {
+		const prefix = "# 注释\r\n[tools]\r\ndeferred = ";
+		const array =
+			"[\r\n  # heading ]\r\n  \"unknown#]\", # keep unknown\r\n  'weather', # keep removed\r\n  # ending\r\n]";
+		const suffix = ' # suffix\r\n[other]\r\ntext = """\n[tools]\ndeferred = []\n"""';
+		writeFileSync(configPath, prefix + array + suffix);
+		expect(setDeferredTool(configPath, "weather", false)).toEqual(["unknown#]"]);
+		expect(readFileSync(configPath, "utf8")).toBe(
+			prefix + '[\r\n  # heading ]\r\n  "unknown#]" # keep unknown\r\n   # keep removed\r\n  # ending\r\n]' + suffix,
+		);
+		setDeferredTool(configPath, 'new"\\\n', true);
+		expect(readDeferredTools(configPath)).toEqual(["unknown#]", 'new"\\\n']);
+		const result = readFileSync(configPath, "utf8");
+		expect(result.startsWith(prefix)).toBe(true);
+		expect(result.endsWith(suffix)).toBe(true);
+		const bytes = readFileSync(configPath);
+		expect(bytes.subarray(0, Buffer.byteLength(prefix))).toEqual(Buffer.from(prefix));
+		expect(bytes.subarray(bytes.length - Buffer.byteLength(suffix))).toEqual(Buffer.from(suffix));
+		for (const comment of ["# heading ]", "# keep unknown", "# keep removed", "# ending"])
+			expect(result).toContain(comment);
 	});
 });
 
@@ -502,11 +697,16 @@ describe("select loading", () => {
 
 type HarnessEvent = { reason?: string; systemPromptOptions?: { sections?: Record<string, string> } };
 
-function extensionHarness(active: string[] = [], tools: ToolMetadata[] = []) {
-	const handlers = new Map<string, (event: HarnessEvent) => void>();
+function extensionHarness(active: string[] = [], tools: ToolMetadata[] = [], fs?: DeferredConfigFileSystem) {
+	const handlers = new Map<string, (event: HarnessEvent, ctx: ExtensionCommandContext) => void>();
+	const errors: string[] = [];
 	const updates: string[][] = [];
+	const commands = new Map<string, Omit<RegisteredCommand, "name" | "sourceInfo">>();
 	let tool!: ReturnType<typeof createToolSearchTool>;
 	const pi = {
+		registerCommand(name: string, command: Omit<RegisteredCommand, "name" | "sourceInfo">) {
+			commands.set(name, command);
+		},
 		registerTool(value: typeof tool) {
 			tool = value;
 		},
@@ -516,18 +716,732 @@ function extensionHarness(active: string[] = [], tools: ToolMetadata[] = []) {
 			active.splice(0, active.length, ...names);
 			updates.push([...names]);
 		},
-		on(event: string, handler: (event: HarnessEvent) => void) {
+		on(event: string, handler: (event: HarnessEvent, ctx: ExtensionCommandContext) => void) {
 			handlers.set(event, handler);
 		},
 	} as unknown as ExtensionAPI;
-	createToolSearchExtension(pi, configPath);
+	createToolSearchExtension(pi, configPath, fs);
 	return {
 		tool,
+		commands,
 		updates,
 		events: [...handlers.keys()],
-		emit: (event: string, value: HarnessEvent = {}) => handlers.get(event)!(value),
+		errors,
+		emit: (event: string, value: HarnessEvent = {}) =>
+			handlers.get(event)!(value, {
+				ui: { notify: (message: string) => errors.push(message) },
+			} as unknown as ExtensionCommandContext),
 	};
 }
+
+async function openTools(host: ReturnType<typeof extensionHarness>, mode = "tui") {
+	initTheme("dark");
+	let panel: Component | undefined;
+	const errors: string[] = [];
+	const ctx = {
+		mode,
+		ui: {
+			notify(message: string) {
+				errors.push(message);
+			},
+			custom: async (factory: Parameters<ExtensionCommandContext["ui"]["custom"]>[0]) => {
+				panel = await factory(
+					{ requestRender() {} } as never,
+					{ fg: (_color: string, text: string) => text, bold: (text: string) => text } as never,
+					{} as never,
+					() => {},
+				);
+			},
+		},
+	} as unknown as ExtensionCommandContext;
+	await host.commands.get("tools")!.handler("", ctx);
+	return { panel: panel!, errors, text: () => Bun.stripANSI(panel!.render(100).join("\n")) };
+}
+
+function focusPanelTool(ui: Awaited<ReturnType<typeof openTools>>, name: string): void {
+	const cursor = Bun.stripANSI(getSettingsListTheme().cursor);
+	const visited = new Set<string>();
+	while (true) {
+		const selectedLine = ui
+			.text()
+			.split("\n")
+			.find((line) => line.startsWith(cursor));
+		if (!selectedLine) throw new Error("Panel has no visible selected row.");
+		const selectedName = selectedLine.slice(cursor.length).trimStart().split(/\s+/)[0];
+		if (selectedName === name) return;
+		if (visited.has(selectedName)) throw new Error(`Tool ${name} was not found in the panel.`);
+		visited.add(selectedName);
+		ui.panel.handleInput!("\x1b[B");
+	}
+}
+
+describe("#15 panel persistence", () => {
+	test("panel coexists with retryable legacy cleanup and never overwrites a newer handwritten policy", async () => {
+		const legacyPath = join(configDir, "xsettings.toml");
+		const legacy = '[tools]\npi-tool-search.tools = ["weather"]\n[other]\nkeep = 7\n';
+		writeFileSync(legacyPath, legacy);
+		expect(() =>
+			migrateDeferredTools(configPath, legacyPath, {
+				read: deferredConfigFileSystem.read,
+				write(path, source) {
+					if (path === legacyPath) throw new Error("cleanup failed");
+					writeFileSync(path, source);
+				},
+			}),
+		).toThrow("Retry initialization");
+		expect(readDeferredTools(configPath)).toEqual(["weather"]);
+		expect(readFileSync(legacyPath, "utf8")).toBe(legacy);
+		const source = '["tools"]\n"deferred" = [\n "weather", # keep weather note\n "unknown", # keep unregistered\n]\n';
+		writeFileSync(configPath, source);
+		const active = [TOOL_SEARCH_NAME, "weather"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+		);
+		host.emit("session_start");
+		expect(readFileSync(configPath, "utf8")).toBe(source);
+		expect(parse(readFileSync(legacyPath, "utf8"))).toEqual({ other: { keep: 7 } });
+		const ui = await openTools(host);
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[A");
+		ui.panel.handleInput!("\r");
+		expect(ui.errors).toEqual([]);
+		expect(readDeferredTools(configPath)).toEqual(["unknown"]);
+		expect(readFileSync(configPath, "utf8")).toBe(
+			'["tools"]\n"deferred" = [\n  # keep weather note\n "unknown" # keep unregistered\n]\n',
+		);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		expect(ui.text()).toContain("[x] direct");
+	});
+	test("panel rereads complex external edits and preserves byte comments while updating current policy", async () => {
+		writeFileSync(configPath, "[tools]\ndeferred = []\n");
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		const prefix = '# external\r\n"tools" = { "deferred" = ';
+		const suffix = ', other = """\n[tools]\ndeferred = ["decoy"]\n""" } # suffix';
+		writeFileSync(
+			configPath,
+			prefix + "[\r\n  \"external\", # unregistered\r\n  'wind', # changed other tool\r\n]" + suffix,
+		);
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		expect(ui.errors).toEqual([]);
+		expect(readFileSync(configPath, "utf8")).toBe(
+			prefix + '[\r\n  "external", # unregistered\r\n  \'wind\', # changed other tool\r\n"weather"]' + suffix,
+		);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "wind"]); // single-target toggle preserves other active tools
+		expect(ui.text().match(/\[ \] deferred/g)).toHaveLength(2);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		const loaded = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["wind"]);
+	});
+
+	test("panel rejects observed conflicts without committing UI/policy, then permits a repaired retry", async () => {
+		const original = '[tools]\ndeferred = [\n # keep\n "unknown",\n]\n';
+		const external = '[tools]\ndeferred = [\n # external\n "unknown", "wind",\n]\n';
+		writeFileSync(configPath, original);
+		let conflict = true;
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+			{
+				read: deferredConfigFileSystem.read,
+				write(path, source, expected) {
+					if (conflict) writeFileSync(path, external);
+					deferredConfigFileSystem.write(path, source, expected);
+				},
+			},
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		const chooseDeferred = () => {
+			focusPanelTool(ui, "weather");
+			ui.panel.handleInput!("\r");
+			ui.panel.handleInput!("\x1b[B");
+			ui.panel.handleInput!("\r");
+		};
+		chooseDeferred();
+		expect(ui.errors.join(" ")).toContain("changed while saving");
+		expect(readFileSync(configPath, "utf8")).toBe(external);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather", "wind"]);
+		expect(ui.text().match(/\[x\] direct/g)).toHaveLength(2);
+		host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather", "wind"]);
+		conflict = false;
+		chooseDeferred();
+		expect(readDeferredTools(configPath)).toEqual(["unknown", "wind", "weather"]);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "wind"]);
+		host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+	});
+	test("actual panel creates missing keys/tables without rewriting existing bytes", async () => {
+		for (const [source, expected] of [
+			[
+				'# keep\r\n["tools"] # header\r\nother = 7\r\n[after]\r\nx = 1',
+				'# keep\r\n["tools"] # header\r\ndeferred = ["weather"]\r\nother = 7\r\n[after]\r\nx = 1',
+			],
+			["[tools] # EOF", '[tools] # EOF\ndeferred = ["weather"]\n'],
+			["[other]\nvalue = 7", '[other]\nvalue = 7\n[tools]\ndeferred = ["weather"]\n'],
+			["tools.other = 7\n[after]\nx = 1\n", 'tools.other = 7\ntools.deferred = ["weather"]\n[after]\nx = 1\n'],
+			["[tools.child]\nx = 1\n", 'tools.deferred = ["weather"]\n[tools.child]\nx = 1\n'],
+			["tools = { other = 7 } # inline\n", 'tools = { other = 7 , deferred = ["weather"]} # inline\n'],
+			["tools = {}", 'tools = {deferred = ["weather"]}'],
+			["# empty\n", '# empty\n[tools]\ndeferred = ["weather"]\n'],
+		]) {
+			writeFileSync(configPath, source);
+			const active = [TOOL_SEARCH_NAME, "weather"];
+			const host = extensionHarness(
+				active,
+				active.map((name) => metadata(name, name)),
+			);
+			host.emit("session_start");
+			const ui = await openTools(host);
+			focusPanelTool(ui, "weather");
+			ui.panel.handleInput!("\r");
+			ui.panel.handleInput!("\x1b[B");
+			ui.panel.handleInput!("\r");
+			expect(ui.errors).toEqual([]);
+			expect(readFileSync(configPath, "utf8")).toBe(expected);
+			expect(active).toEqual([TOOL_SEARCH_NAME]);
+			expect(ui.text()).toContain("[ ] deferred");
+		}
+	});
+});
+
+describe("persistent /tools panel", () => {
+	for (const mode of ["print", "json", "rpc"]) {
+		test(`non-TUI ${mode} reports an error without opening UI or writing`, async () => {
+			const ui = await openTools(extensionHarness(), mode);
+			expect(ui.errors).toEqual(["/tools requires TUI mode"]);
+			expect(ui.panel).toBeUndefined();
+			expect(existsSync(configPath)).toBe(false);
+		});
+	}
+
+	test("search-loaded deferred persists across turns and reopening; explicit deferred unloads, direct restores", async () => {
+		configure(["weather", "unknown"]);
+		const active = [TOOL_SEARCH_NAME, "weather"];
+		const tools = active.map((name) => metadata(name, name));
+		const host = extensionHarness(active, tools);
+		host.emit("session_start");
+		await host.tool.execute("load", { query: "weather" }, undefined, undefined, {} as never);
+		for (let turn = 0; turn < 3; turn++) {
+			host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+			expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		}
+		const ui = await openTools(host);
+		expect(ui.text()).toContain("[ ] deferred");
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		const before = readFileSync(configPath, "utf8");
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\r"); // explicitly choose current deferred again
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		active.push("weather"); // another extension tries to restore it
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("weather");
+		const loaded = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["weather"]);
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+		const freshActive = [TOOL_SEARCH_NAME, "weather"];
+		const fresh = extensionHarness(freshActive, tools);
+		fresh.emit("session_start");
+		expect(freshActive).toEqual([TOOL_SEARCH_NAME]);
+		const freshUi = await openTools(fresh);
+		focusPanelTool(freshUi, "weather");
+		freshUi.panel.handleInput!("\r");
+		freshUi.panel.handleInput!("\x1b[A"); // select direct
+		freshUi.panel.handleInput!("\r");
+		expect(freshActive).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		expect(readDeferredTools(configPath)).toEqual(["unknown"]);
+		expect(freshUi.text()).toContain("[x] direct");
+		const nextActive = [TOOL_SEARCH_NAME, "weather"];
+		extensionHarness(nextActive, tools).emit("session_start");
+		expect(nextActive).toEqual([TOOL_SEARCH_NAME, "weather"]);
+	});
+
+	test("opening invalid TOML or a failed parse during selection changes no active/UI policy", async () => {
+		configure([]);
+		const active = [TOOL_SEARCH_NAME, "weather"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		writeFileSync(configPath, '[tools]\ndeferred = ["broken"\n');
+		const bad = await openTools(host);
+		expect(bad.panel).toBeUndefined();
+		expect(bad.errors.join(" ")).toContain("Cannot open /tools");
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		expect(ui.errors.join(" ")).toContain("Cannot save /tools");
+		expect(ui.text()).toContain("[x] direct");
+		host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		expect(readFileSync(configPath, "utf8")).toBe('[tools]\ndeferred = ["broken"\n');
+	});
+
+	test("each toggle rereads disk, preserving external names and updating the whole search policy", async () => {
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		writeFileSync(configPath, '[tools]\ndeferred = ["external", "wind"] # keep\n');
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		expect(readFileSync(configPath, "utf8")).toBe('[tools]\ndeferred = ["external", "wind", "weather"] # keep\n');
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		const loaded = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["wind"]);
+		expect(ui.text().match(/\[ \] deferred/g)).toHaveLength(2);
+	});
+	test("ordinary search and select use the same latest persisted deferred policy", async () => {
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, "forecast")),
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		active.splice(active.indexOf("wind"), 1); // another owner made this non-deferred tool inactive
+		const loaded = await host.tool.execute("load", { query: "forecast" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["weather"]);
+		const notDeferred = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+		expect(notDeferred.details.status).toBe("invalid_select");
+		host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+	});
+	test("failed atomic save rolls back the actual SettingsList value, policy and active tools", async () => {
+		const source = '[tools]\ndeferred = ["unknown"] # keep\n';
+		writeFileSync(configPath, source);
+		const active = [TOOL_SEARCH_NAME, "weather"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+			{
+				read: (path) => readFileSync(path, "utf8"),
+				write() {
+					throw new Error("disk full");
+				},
+			},
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		expect(ui.errors.join(" ")).toContain("disk full");
+		expect(ui.text()).toContain("[x] direct");
+		expect(ui.text()).not.toContain("[ ] deferred");
+		expect(readFileSync(configPath, "utf8")).toBe(source);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		active.splice(active.indexOf("weather"), 1);
+		const rejected = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		expect(rejected.details.status).toBe("invalid_select");
+	});
+	test("editable scope is sorted and excludes self, native exposures and initially inactive tools", async () => {
+		configure([TOOL_SEARCH_NAME, "outside", "native"]);
+		const active = [TOOL_SEARCH_NAME, "zebra", "alpha", "native", "code", "hidden", "model"];
+		const tools = [
+			metadata(TOOL_SEARCH_NAME, "search"),
+			metadata("outside", "outside"),
+			metadata("zebra", "zebra"),
+			metadata("alpha", "alpha"),
+			{ ...metadata("native", "native"), exposure: "deferred" },
+			{ ...metadata("code", "code"), exposure: "codemode" },
+			{ ...metadata("hidden", "hidden"), exposure: "hidden" },
+			{ ...metadata("model", "model"), exposure: "model-only" },
+		];
+		const host = extensionHarness(active, tools);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		expect(ui.text().indexOf("alpha")).toBeLessThan(ui.text().indexOf("zebra"));
+		for (const name of [TOOL_SEARCH_NAME, "outside", "native", "code", "hidden", "model"])
+			expect(ui.text()).toMatch(new RegExp(`${name}\\s+.*readonly`));
+		active.push("outside");
+		host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
+		expect(active).toContain(TOOL_SEARCH_NAME);
+		expect(active).toContain("native");
+		expect(active).toContain("outside");
+		active.splice(active.indexOf("outside"), 1);
+		const rejected = await host.tool.execute("load", { query: "select:outside" }, undefined, undefined, {} as never);
+		expect(rejected.details.status).toBe("invalid_select");
+		const search = await host.tool.execute("load", { query: "outside" }, undefined, undefined, {} as never);
+		expect(search.details.activation.added).toEqual([]);
+	});
+	test("TUI user can defer a tool immediately and select loads the new persisted policy", async () => {
+		const active = [TOOL_SEARCH_NAME, "weather"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, name)),
+		);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		expect(ui.text()).toContain("[x] direct");
+		focusPanelTool(ui, "weather");
+		ui.panel.handleInput!("\r"); // choose weather policy
+		ui.panel.handleInput!("[B"); // deferred
+		ui.panel.handleInput!("\r");
+		expect(ui.errors).toEqual([]);
+		expect(readDeferredTools(configPath)).toEqual(["weather"]);
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		expect(ui.text()).toContain("[ ] deferred");
+		const result = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		expect(result.details.activation.added).toEqual(["weather"]);
+	});
+});
+
+function choosePanelPolicy(ui: Awaited<ReturnType<typeof openTools>>, name: string, deferred: boolean): void {
+	focusPanelTool(ui, name);
+	ui.panel.handleInput!("\r");
+	ui.panel.handleInput!(deferred ? "\x1b[B" : "\x1b[A");
+	ui.panel.handleInput!("\r");
+}
+
+describe("long-session policy consistency (#17)", () => {
+	test("search to direct to deferred revokes the load exemption and can search again", async () => {
+		configure(["weather", "outside", "native", TOOL_SEARCH_NAME]);
+		const active = [TOOL_SEARCH_NAME, "weather", "wind", "native"];
+		const tools = [
+			...active.filter((name) => name !== "native").map((name) => metadata(name, "forecast")),
+			{ ...metadata("native", "forecast"), exposure: "deferred" },
+			metadata("outside", "forecast"),
+		];
+		const host = extensionHarness(active, tools);
+		host.emit("session_start");
+		await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		const ui = await openTools(host);
+		choosePanelPolicy(ui, "weather", false);
+		expect(active).toContain("weather");
+		expect(readDeferredTools(configPath)).toEqual(["outside", "native", TOOL_SEARCH_NAME]);
+		choosePanelPolicy(ui, "weather", true);
+		expect(ui.errors).toEqual([]);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "native", "wind"]);
+		active.splice(active.indexOf("wind"), 1); // unrelated owner deactivates a direct tool
+		active.push("weather", "outside"); // unrelated owner reactivates unloaded deferred and scope-excluded names
+		const sections: Record<string, string> = {};
+		for (let turn = 0; turn < 3; turn++) {
+			host.emit("before_agent_start", { systemPromptOptions: { sections } });
+			expect(active).toEqual([TOOL_SEARCH_NAME, "native", "outside"]);
+			expect(sections[DEFERRED_SECTION_KEY]).toContain("weather");
+			expect(sections[DEFERRED_SECTION_KEY]).not.toContain("outside");
+			expect(sections[DEFERRED_SECTION_KEY]).not.toContain("native");
+			active.push("weather");
+		}
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		const loaded = await host.tool.execute("load", { query: "forecast" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["weather"]);
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "native", "outside", "weather"]);
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+	});
+
+	test("reopening refreshes disk, registry and active without unloading search-loaded tools; read errors retain the snapshot", async () => {
+		configure(["weather"]);
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const tools = active.map((name) => metadata(name, "forecast"));
+		const host = extensionHarness(active, tools);
+		host.emit("session_start");
+		await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		const first = await openTools(host);
+		expect(first.text()).toMatch(/weather\s+\[ \] deferred/);
+		expect(first.text()).toMatch(/wind\s+\[x\] direct/);
+		tools.push(metadata("outside", "forecast")); // newly registered, not assigned
+		active.push("outside");
+		configure(["weather", "wind", "outside", "unregistered", TOOL_SEARCH_NAME]);
+		const reopened = await openTools(host);
+		expect(reopened.errors).toEqual([]);
+		expect(reopened.text()).toMatch(/wind\s+\[ \] deferred/);
+		expect(reopened.text()).toMatch(/outside\s+active \(readonly\)/);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "wind", "weather", "outside"]);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather", "outside"]);
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		expect(sections[DEFERRED_SECTION_KEY]).not.toContain("weather");
+		expect(sections[DEFERRED_SECTION_KEY]).not.toContain("outside");
+		expect(sections[DEFERRED_SECTION_KEY]).not.toContain("unregistered");
+		const latest = await openTools(host);
+		expect(latest.text()).toMatch(/outside\s+active \(readonly\)/);
+		active.splice(active.indexOf("outside"), 1);
+		const inactive = await openTools(host);
+		expect(inactive.text()).toMatch(/outside\s+inactive \(readonly\)/);
+		writeFileSync(configPath, "[tools]\ndeferred = [broken\n");
+		const failed = await openTools(host);
+		expect(failed.panel).toBeUndefined();
+		expect(failed.errors.join(" ")).toContain("Cannot open /tools");
+		active.push("wind", "outside");
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather", "outside"]);
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		const loaded = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["wind"]);
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+		configure(["wind", "outside", "unregistered"]);
+		const repaired = await openTools(host);
+		expect(repaired.errors).toEqual([]);
+		expect(repaired.text()).toMatch(/weather\s+\[x\] direct/);
+		expect(repaired.text()).toMatch(/wind\s+\[ \] deferred/);
+		expect(active).toContain("wind");
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+	});
+
+	for (const reason of ["new", "resume", "fork"]) {
+		test(`${reason} event resets loads but neither recaptures outsiders nor restores inactive direct tools`, async () => {
+			configure(["weather", "wind", "outside"]);
+			const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+			const host = extensionHarness(
+				active,
+				[...active, "outside"].map((name) => metadata(name, "forecast")),
+			);
+			host.emit("session_start", { reason: "startup" });
+			await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+			active.push("outside");
+			configure(["weather", "outside"]); // wind is now direct, but not active
+			host.emit("session_start", { reason });
+			expect(active).toEqual([TOOL_SEARCH_NAME, "outside"]);
+			const ui = await openTools(host);
+			expect(ui.text()).toMatch(/outside\s+active \(readonly\)/);
+			expect(ui.text()).toMatch(/wind\s+\[x\] direct/);
+			const rejected = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+			expect(rejected.details.status).toBe("invalid_select");
+			const loaded = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+			expect(loaded.details.activation.added).toEqual(["weather"]);
+		});
+	}
+
+	test("an initially empty scope stays empty when another owner later activates a registered tool", async () => {
+		configure(["outside"]);
+		const active = [TOOL_SEARCH_NAME];
+		const host = extensionHarness(active, [metadata(TOOL_SEARCH_NAME, "search"), metadata("outside", "forecast")]);
+		host.emit("session_start", { reason: "startup" });
+		active.push("outside");
+		host.emit("session_start", { reason: "new" });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "outside"]);
+		const ui = await openTools(host);
+		expect(ui.text()).toMatch(/outside\s+active \(readonly\)/);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+		const loaded = await host.tool.execute("load", { query: "select:outside" }, undefined, undefined, {} as never);
+		expect(loaded.details.status).toBe("invalid_select");
+	});
+	test("filesystem read failures on reopen preserve valid policy and search-loaded tools", async () => {
+		configure(["weather", "wind"]);
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, "forecast")),
+		);
+		host.emit("session_start");
+		await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		rmSync(configPath);
+		mkdirSync(configPath); // real EISDIR, not a parse error or missing-file empty policy
+		const failed = await openTools(host);
+		expect(failed.panel).toBeUndefined();
+		expect(failed.errors.join(" ")).toContain("Cannot open /tools");
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		active.push("wind");
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		rmSync(configPath, { recursive: true });
+		configure(["weather", "wind"]);
+		const repaired = await openTools(host);
+		expect(repaired.errors).toEqual([]);
+		expect(repaired.text().match(/\[ \] deferred/g)).toHaveLength(2);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+	});
+
+	test("session initialization rereads policy and read errors preserve valid policy and loaded state", async () => {
+		configure(["weather"]);
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const host = extensionHarness(
+			active,
+			active.map((name) => metadata(name, "forecast")),
+		);
+		host.emit("session_start", { reason: "startup" });
+		await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		const before = [...active];
+		writeFileSync(configPath, "[tools]\ndeferred = [broken\n");
+		host.emit("session_start", { reason: "new" });
+		expect(host.errors.join(" ")).toContain("Cannot initialize Tool Search");
+		expect(active).toEqual(before);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(active).toEqual(before);
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+		configure(["weather", "wind", "unknown"]);
+		host.emit("session_start", { reason: "new" });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("weather");
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		expect(sections[DEFERRED_SECTION_KEY]).not.toContain("unknown");
+		const loaded = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["wind"]);
+	});
+	test("new session resets search loads without rebuilding scope from the clipped active set", async () => {
+		configure(["weather", "wind", "outside"]);
+		const active = [TOOL_SEARCH_NAME, "weather", "wind"];
+		const tools = [...active, "outside"].map((name) => metadata(name, "forecast"));
+		const host = extensionHarness(active, tools);
+		host.emit("session_start", { reason: "startup" });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
+		host.emit("session_start", { reason: "new" });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		const ui = await openTools(host);
+		expect(ui.text()).toMatch(/wind\s+\[ \] deferred/);
+		expect(ui.text()).toMatch(/outside\s+.*readonly/);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toContain("wind");
+		expect(sections[DEFERRED_SECTION_KEY]).not.toContain("outside");
+		const loaded = await host.tool.execute("load", { query: "select:wind" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["wind"]);
+		host.emit("session_start", { reason: "new" });
+		expect(active).toEqual([TOOL_SEARCH_NAME]);
+		const again = await host.tool.execute("load", { query: "forecast" }, undefined, undefined, {} as never);
+		expect(again.details.activation.added).toEqual(["weather", "wind"]);
+	});
+});
+
+describe("/tools registered discovery and readonly boundaries (#16)", () => {
+	test("readonly reasons use host exposure, never guess disabled or strict selection from inactive", async () => {
+		configure(["native", "code", "outside", "missing", TOOL_SEARCH_NAME]);
+		const active = [TOOL_SEARCH_NAME, "alpha", "native", "code", "hidden", "model"];
+		const tools = [
+			metadata("alpha", "editable"),
+			{ ...metadata("code", "code"), exposure: "codemode" },
+			{ ...metadata("hidden", "hidden"), exposure: "hidden" },
+			{ ...metadata("model", "model"), exposure: "model-only" },
+			{ ...metadata("native", "native"), exposure: "deferred" },
+			metadata("outside", "not selected"),
+			metadata(TOOL_SEARCH_NAME, "search"),
+		];
+		const host = extensionHarness(active, tools, {
+			read: deferredConfigFileSystem.read,
+			write() {
+				throw new Error("readonly actions must never write");
+			},
+		});
+		host.emit("session_start");
+		const updatesBeforeInput = [...host.updates];
+		const ui = await openTools(host);
+		const before = readFileSync(configPath, "utf8");
+		ui.panel.handleInput!("\x1b[B"); // code
+		expect(ui.text()).toContain("Host exposure: codemode");
+		expect(ui.text()).toMatch(/code\s+host codemode · active \(readonly\)/);
+		expect(ui.text()).toMatch(/native\s+host deferred · active \(readonly\)/);
+		for (const reason of [
+			"Host exposure: codemode",
+			"Host exposure: hidden",
+			"Host exposure: model-only",
+			"Host exposure: deferred",
+		]) {
+			expect(ui.text()).toContain(reason);
+			for (const key of ["\r", " "]) ui.panel.handleInput!(key);
+			ui.panel.handleInput!("\x1b[B");
+		}
+		expect(ui.text()).toContain("Outside current assigned scope.");
+		expect(ui.text()).not.toMatch(/disabled|strict selection|MCP/);
+		expect(ui.text()).toMatch(/outside\s+inactive \(readonly\)/);
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B"); // self
+		expect(ui.text()).toContain("Tool Search stays available");
+		ui.panel.handleInput!(" ");
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "alpha", "native", "code", "hidden", "model"]);
+		expect(host.updates).toEqual(updatesBeforeInput);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+		for (const query of ["select:native,code,outside", "native code outside"]) {
+			const result = await host.tool.execute("load", { query }, undefined, undefined, {} as never);
+			expect(result.details.activation.added).toEqual([]);
+			expect(result.details.counts.registered).toBe(1);
+		}
+		expect(ui.errors).toEqual([]);
+	});
+	test("all registered tools are sorted; readonly input leaves disk and active unchanged", async () => {
+		configure(["unknown", "outside"]);
+		const active = [TOOL_SEARCH_NAME, "zebra", "alpha"];
+		const host = extensionHarness(active, [
+			metadata("zebra", "zebra"),
+			metadata(TOOL_SEARCH_NAME, "search"),
+			metadata("outside", "outside"),
+			metadata("alpha", "alpha"),
+		]);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		const text = ui.text();
+		expect(text.indexOf("alpha")).toBeLessThan(text.indexOf("outside"));
+		expect(text.indexOf("outside")).toBeLessThan(text.indexOf(TOOL_SEARCH_NAME));
+		expect(text.indexOf(TOOL_SEARCH_NAME)).toBeLessThan(text.indexOf("zebra"));
+		expect(text).toMatch(/outside\s+.*inactive.*readonly/);
+		expect(text).not.toMatch(/outside\s+\[ \] deferred/);
+		const before = readFileSync(configPath, "utf8");
+		ui.panel.handleInput!("\x1b[B"); // outside
+		expect(ui.text()).toContain("Outside current assigned scope");
+		for (const key of ["\r", " ", "\r"]) ui.panel.handleInput!(key);
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "zebra", "alpha"]);
+		ui.panel.handleInput!("\x1b[B"); // tool_search
+		for (const key of ["\r", " "]) ui.panel.handleInput!(key);
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(active).toContain(TOOL_SEARCH_NAME);
+		ui.panel.handleInput!("\x1b[B"); // zebra, editable
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		expect(readDeferredTools(configPath)).toEqual(["unknown", "outside", "zebra"]);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "alpha"]);
+		expect(ui.text()).toMatch(/outside\s+.*inactive.*readonly/);
+		const loaded = await host.tool.execute("load", { query: "select:zebra" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["zebra"]);
+		const rejected = await host.tool.execute("load", { query: "select:outside" }, undefined, undefined, {} as never);
+		expect(rejected.details.status).toBe("invalid_select");
+		expect(ui.errors).toEqual([]);
+	});
+});
 
 describe("single-extension lifecycle", () => {
 	test("stale xsettings publications cannot replace the actual deferred snapshot", async () => {
@@ -618,7 +1532,7 @@ describe("single-extension lifecycle", () => {
 });
 
 describe("dynamic loading", () => {
-	test("migrates before the extension snapshot and uses it for the active tool list on repeated sessions", async () => {
+	test("migrates before initialization and uses the latest persisted policy on repeated sessions", async () => {
 		const legacy = join(configDir, "xsettings.toml");
 		const names = Array.from({ length: 25 }, (_, index) => `tool_${index}`);
 		writeFileSync(legacy, `[tools]\npi-tool-search.tools = ${JSON.stringify(names)}\npi.defaultTools = ["direct"]\n`);
@@ -631,12 +1545,14 @@ describe("dynamic loading", () => {
 		const host = extensionHarness(active, tools);
 		expect(new Set(readDeferredTools(configPath))).toEqual(new Set(names));
 		expect(parse(readFileSync(legacy, "utf8"))).toEqual({});
+		host.emit("session_start", { reason: "startup" });
+		expect(active).toEqual([TOOL_SEARCH_NAME, "direct"]);
 		configure(["direct"]);
 		const migratedLegacy = readFileSync(legacy, "utf8");
 		for (let session = 0; session < 2; session++) {
 			active.splice(0, active.length, TOOL_SEARCH_NAME, "direct", ...names);
-			host.emit("session_start");
-			expect(active).toEqual([TOOL_SEARCH_NAME, "direct"]);
+			host.emit("session_start", { reason: "new" });
+			expect(active).toEqual([TOOL_SEARCH_NAME, ...names]);
 		}
 		expect(readDeferredTools(configPath)).toEqual(["direct"]);
 		expect(readFileSync(legacy, "utf8")).toBe(migratedLegacy);
@@ -663,11 +1579,11 @@ describe("dynamic loading", () => {
 		];
 		configure(["deferred_weather", "disabled_weather"]);
 		const host = extensionHarness(active, tools);
-		// Session startup must use the factory snapshot, not reread the changed file.
-		configure(["direct_issues"]);
+		// A new session reads the current file rather than the factory snapshot.
+		configure(["direct_issues", "disabled_weather"]);
 		host.emit("session_start");
 
-		expect(active).toEqual([TOOL_SEARCH_NAME, "direct_issues"]);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "deferred_weather"]);
 	});
 
 	test("excludes active tools and activates matches additively", async () => {
@@ -966,6 +1882,7 @@ describe("dynamic loading", () => {
 		const tools = [metadata(TOOL_SEARCH_NAME, "Search tools."), metadata("deferred_weather", "Weather data.")];
 		let registeredTool: { execute: (id: string, parameters: { query: string }) => Promise<unknown> } | undefined;
 		const pi = {
+			registerCommand() {},
 			registerTool(tool: typeof registeredTool) {
 				registeredTool = tool;
 			},

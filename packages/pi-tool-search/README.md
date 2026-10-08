@@ -18,31 +18,33 @@ pi install npm:@luan.sh/pi-tool-search
 
 Deferred tools are configured directly in `~/.pi/agent/tool-search.toml`; no xsettings extension is required.
 
-The package registers no keybindings and no commands. It uses Pi's dynamic
-tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
+The package registers `/tools` (TUI only), but no keybindings. It uses Pi's
+dynamic tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
 
 ## Scope
 
 `@luan.sh/pi-tool-search` always runs as a direct Pi tool. Its assigned scope
-is the other tools that were active in Pi at session start. Loading a match
-calls `pi.setActiveTools()` in that scope.
+is the other eligible direct tools active before its first session-start pruning.
+That assignment lasts for the extension instance. Loading a match calls
+`pi.setActiveTools()` in that scope.
 
 ## Deferred scope
 
-All tools remain registered with Pi, but checked tools start inactive. At
-session start, the package builds the deferred-tool picker from its assigned
-scope. It does not use every tool returned by `pi.getAllTools()` as a global
-search index.
+All tools remain registered with Pi, but managed configured deferred tools start
+inactive. The search index uses only the initially assigned direct scope, not
+all tools returned by `pi.getAllTools()`.
 
-The assigned scope is the boundary for both the picker and the search:
+The assigned scope is the boundary for search and editable panel policies:
 
-- The direct scope contains only the active direct tools that Tool Search was
-  assigned.
-- Registered tools outside that scope are invisible to `tool_search`.
-- Disabled tools, tools omitted by a strict `--tools` selection, and tools
-  outside the current scope are not deferred and do not appear in the picker.
+- The direct scope contains only the eligible active direct tools Tool Search was
+  initially assigned, including tools subsequently made deferred/inactive.
+- Registered tools outside that scope are invisible to `tool_search`, but appear
+  as readonly rows in `/tools`.
+- Disabled tools and tools omitted by a strict `--tools` selection are not managed
+  deferred tools. Registered scope-excluded names can be displayed readonly, but
+  the panel does not override their owner or infer exclusion provenance.
 
-Checked names are removed from that scope before the first model request.
+Configured deferred names are removed from the active set before the first model request.
 `tool_search` itself stays active so the model can load a capability later.
 When a query matches, activation is additive: existing active tools stay
 active and only the matching tools are added. A no-match query changes
@@ -61,13 +63,75 @@ deferred = ["exec_command", "web__run"]
 
 `tools.deferred` is an array of tool-name strings. A missing file or key means
 an empty deferred list. Invalid TOML is reported as an error. Configuration
-is read once when the extension initializes; changes apply after `/reload`.
+is read when the extension or a session initializes; manual edits apply after
+`/reload`, the next session initialization or opening `/tools` to refresh policy.
+There is no file watcher or per-turn disk read. Opening alone does not unload
+search-loaded tools; a read error reports an error and retains the last valid state.
 An existing new-format file takes precedence. On first initialization, an
 existing legacy `[tools]` section in `xsettings.toml` is migrated once, then
 removed from that file; all other sections are preserved. `/xsettings` is no
 longer provided by this fork. The activity indicator falls back to Pi's native
 spinner. `pi.defaultTools` is deprecated and not migrated because it has no
 consumer.
+
+## Persistent tool panel
+
+In a TUI session, run `/tools`. All registered tools are sorted by name; only the assigned direct scope is editable. `[x] direct`
+means persistently exposed; `[ ] deferred` means hidden until loaded by
+`tool_search`, not disabled. Enter/Space opens a direct/deferred choice; Esc
+closes it. Selecting a policy saves immediately and updates the active set,
+without `/reload` or session entries. New instances inherit the saved file.
+
+A deferred tool remains unchecked even when search has loaded it. Reopening
+keeps that tool active. To unload it explicitly, select deferred again; it can
+then be searched or selected again. Direct restores its declaration immediately.
+Search → direct → deferred also clears the earlier search-load exemption.
+Every turn reasserts the latest successfully read/saved policy within the assigned
+scope, resisting unrelated extensions reactivating unloaded deferred tools while
+preserving all other active state. Deferred hints track that policy and the active
+set, advertising only assigned, currently unloaded tools.
+
+A new session rereads policy and resets search-load exemptions, but retains the
+scope captured before this extension's first pruning. Already-clipped active sets
+cannot shrink it, and newly active outsiders cannot expand it. Inactive direct
+names are not automatically restored. This plugin-level reset also handles
+session-start events for resume/fork, but does **not** repair the existing blocked
+host/branch automatic restoration flow.
+
+Only tools assigned while active and direct at the instance's first session start are editable.
+`tool_search` itself, host deferred/codemode (including native MCP), hidden/model-only
+exposures and scope-excluded tools are listed **readonly**, never taken over.
+Readonly rows show observed active/inactive state and host exposure when available,
+not the managed direct/deferred policy. Their description explains the boundary;
+Enter/Space performs no save or activation. Inactive alone is not evidence of
+being deferred, disabled or excluded by strict selection. When host metadata does
+not establish a more specific reason, the panel says only “Outside current assigned
+scope”. This registered-tool catalog never expands the assigned search index.
+Other active tools and configured outside/unregistered names are preserved by a toggle.
+
+Run the independent offline component demo from the repository root:
+`bun test/runtime-probes/tools-panel/discovery-demo.ts`. It uses a temporary policy
+and a mock host, but the real extension and SettingsList/SelectList components;
+it does not launch Pi or edit user configuration.
+
+The writer safely locates single/multiline string arrays through literal,
+quoted/escaped/dotted keys and inline tables, even with multiline strings elsewhere.
+All bytes outside an existing array and all comments, including inside it, are
+preserved; unregistered names remain. Comment-bearing arrays retain whitespace
+while elements/commas change; arrays without internal comments may be normalized.
+Missing files get an example comment; missing keys/tables are inserted without
+rewriting existing content. Non-string/empty entries, malformed TOML or layouts
+that cannot be safely located are explicitly rejected rather than overwritten.
+Every selection rereads disk and changes only the selected tool's membership.
+Observed conflicts are checked immediately before atomic commit and rejected.
+A non-cooperating writer may still race between this check and rename; there is
+no unconditional cross-process transaction. Parse/staging/rename failures leave
+the original file, policy, active set and display unchanged; repair the cause and
+retry. Non-TUI modes report an error instead of opening the panel.
+
+Pi's official example `tools.ts` also registers `/tools`, but writes session-only
+enable/disable entries. Do not load both same-named commands. This fork only
+persists global direct/deferred policy; it never implements disable.
 
 ## Use the tool
 
@@ -195,11 +259,12 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 
 ## Troubleshooting
 
-- **A tool is not in the picker:** it was inactive before Tool Search built its
-  scope, disabled by Pi's tool selection, or has not been registered yet. Tool
-  Search does not make it deferred.
-- **A checked tool still appears direct:** restart the session so the deferred
-  set is applied at startup.
+- **A registered tool is readonly in `/tools`:** it is outside the assigned direct
+  scope or has an incompatible host exposure. The host may not reveal whether
+  disabled/strict selection caused exclusion; do not infer that from inactive.
+  Tool Search does not make it deferred. Unregistered tools are not listed.
+- **A deferred tool is still active:** search-loaded tools stay active by design.
+  Choose deferred again in `/tools` to unload it explicitly.
 - **A query returns no matches:** search is limited to inactive tools in the
   assigned scope. Check the exact name and description exposed by the picker.
 
@@ -208,6 +273,8 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 | Responsibility                                        | File                                    |
 | ----------------------------------------------------- | --------------------------------------- |
 | Extension entry, scope selection, deferred activation | `src/extension.ts`                      |
+| Persistent policy panel                               | `src/tools-panel.ts`                    |
+| Deferred config, atomic editing and legacy migration  | `src/config.ts`                         |
 | Tool definition and execution                         | `src/tools/tool-search/definition.ts`   |
 | Result shape (`createToolSearchResult`)               | `src/tools/tool-search/result.ts`       |
 | Transcript rendering                                  | `src/tools/tool-search/presentation.ts` |
