@@ -95,6 +95,7 @@ describe("namespace text through the extension", () => {
 		const handlers = new Map<string, (event: unknown) => void>();
 		let tool!: ReturnType<typeof createToolSearchTool>;
 		const pi = {
+			registerCommand() {},
 			getAllTools: () => tools,
 			getActiveTools: () => [...active],
 			setActiveTools: (names: string[]) => {

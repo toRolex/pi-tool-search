@@ -18,8 +18,8 @@ pi install npm:@luan.sh/pi-tool-search
 
 Deferred tools are configured directly in `~/.pi/agent/tool-search.toml`; no xsettings extension is required.
 
-The package registers no keybindings and no commands. It uses Pi's dynamic
-tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
+The package registers `/tools` (TUI only), but no keybindings. It uses Pi's
+dynamic tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
 
 ## Scope
 
@@ -29,7 +29,7 @@ calls `pi.setActiveTools()` in that scope.
 
 ## Deferred scope
 
-All tools remain registered with Pi, but checked tools start inactive. At
+All tools remain registered with Pi, but configured deferred tools start inactive. At
 session start, the package builds the deferred-tool picker from its assigned
 scope. It does not use every tool returned by `pi.getAllTools()` as a global
 search index.
@@ -42,7 +42,7 @@ The assigned scope is the boundary for both the picker and the search:
 - Disabled tools, tools omitted by a strict `--tools` selection, and tools
   outside the current scope are not deferred and do not appear in the picker.
 
-Checked names are removed from that scope before the first model request.
+Configured deferred names are removed from the active set before the first model request.
 `tool_search` itself stays active so the model can load a capability later.
 When a query matches, activation is additive: existing active tools stay
 active and only the matching tools are added. A no-match query changes
@@ -61,13 +61,44 @@ deferred = ["exec_command", "web__run"]
 
 `tools.deferred` is an array of tool-name strings. A missing file or key means
 an empty deferred list. Invalid TOML is reported as an error. Configuration
-is read once when the extension initializes; changes apply after `/reload`.
+is read when the extension initializes; manual edits apply after `/reload` or
+opening `/tools` to refresh policy (opening alone does not unload search-loaded tools).
 An existing new-format file takes precedence. On first initialization, an
 existing legacy `[tools]` section in `xsettings.toml` is migrated once, then
 removed from that file; all other sections are preserved. `/xsettings` is no
 longer provided by this fork. The activity indicator falls back to Pi's native
 spinner. `pi.defaultTools` is deprecated and not migrated because it has no
 consumer.
+
+## Persistent tool panel
+
+In a TUI session, run `/tools`. Managed tools are sorted by name. `[x] direct`
+means persistently exposed; `[ ] deferred` means hidden until loaded by
+`tool_search`, not disabled. Enter/Space opens a direct/deferred choice; Esc
+closes it. Selecting a policy saves immediately and updates the active set,
+without `/reload` or session entries. New instances inherit the saved file.
+
+A deferred tool remains unchecked even when search has loaded it. Reopening
+keeps that tool active. To unload it explicitly, select deferred again; it can
+then be searched or selected again. Direct restores its declaration immediately.
+
+Only tools assigned while active and direct at session start are editable.
+`tool_search` itself, native deferred/codemode exposures and scope-excluded tools
+are not listed or taken over. This first panel is not a global registered-tool
+catalog. Other active tools are preserved by a toggle.
+
+The minimal writer supports a canonical single-line array under `[tools]`, or
+creates a missing file with an example comment. It preserves all bytes outside
+the array and all unregistered names. Missing keys/tables, multiline arrays or
+strings, quoted/dotted/inline layouts and malformed input are explicitly rejected.
+Every selection rereads the file and changes only the selected tool's membership.
+Observed conflicting edits are rejected, not overwritten. Parse/write errors
+leave the file, policy, active set and display unchanged. Non-TUI modes report
+an error instead of opening the panel.
+
+Pi's official example `tools.ts` also registers `/tools`, but writes session-only
+enable/disable entries. Do not load both same-named commands. This fork only
+persists global direct/deferred policy; it never implements disable.
 
 ## Use the tool
 
@@ -198,8 +229,8 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 - **A tool is not in the picker:** it was inactive before Tool Search built its
   scope, disabled by Pi's tool selection, or has not been registered yet. Tool
   Search does not make it deferred.
-- **A checked tool still appears direct:** restart the session so the deferred
-  set is applied at startup.
+- **A deferred tool is still active:** search-loaded tools stay active by design.
+  Choose deferred again in `/tools` to unload it explicitly.
 - **A query returns no matches:** search is limited to inactive tools in the
   assigned scope. Check the exact name and description exposed by the picker.
 
@@ -208,6 +239,8 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 | Responsibility                                        | File                                    |
 | ----------------------------------------------------- | --------------------------------------- |
 | Extension entry, scope selection, deferred activation | `src/extension.ts`                      |
+| Persistent policy panel                               | `src/tools-panel.ts`                    |
+| Deferred config, atomic editing and legacy migration  | `src/config.ts`                         |
 | Tool definition and execution                         | `src/tools/tool-search/definition.ts`   |
 | Result shape (`createToolSearchResult`)               | `src/tools/tool-search/result.ts`       |
 | Transcript rendering                                  | `src/tools/tool-search/presentation.ts` |
