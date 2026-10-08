@@ -12,9 +12,7 @@ assigned to it. It does not inspect or modify the global tool hierarchy.
 
 ## Install
 
-```sh
-pi install npm:@luan.sh/pi-tool-search
-```
+For this maintained fork, follow the root [Install instructions](../../README.md#install).
 
 Deferred tools are configured directly in `~/.pi/agent/tool-search.toml`; no xsettings extension is required.
 
@@ -266,24 +264,22 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 - **A deferred tool is still active:** search-loaded tools stay active by design.
   Choose deferred again in `/tools` to unload it explicitly.
 - **A query returns no matches:** search is limited to inactive tools in the
-  assigned scope. Check the exact name and description exposed by the picker.
+  assigned scope. Check the exact name and description returned by `pi.getAllTools()`.
 
 ## Layout
 
-| Responsibility                                        | File                                    |
-| ----------------------------------------------------- | --------------------------------------- |
-| Extension entry, scope selection, deferred activation | `src/extension.ts`                      |
-| Persistent policy panel                               | `src/tools-panel.ts`                    |
-| Deferred config, atomic editing and legacy migration  | `src/config.ts`                         |
-| Tool definition and execution                         | `src/tools/tool-search/definition.ts`   |
-| Result shape (`createToolSearchResult`)               | `src/tools/tool-search/result.ts`       |
-| Transcript rendering                                  | `src/tools/tool-search/presentation.ts` |
-| Search and ranking                                    | `src/search.ts`                         |
-| Settings definitions                                  | `src/contributions/xsettings.ts`        |
-| Module exports                                        | `src/index.ts`                          |
+| Responsibility                                        | File                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| Extension entry, scope selection, deferred activation | `src/extension.ts`                                   |
+| Persistent policy panel                               | `src/tools-panel.ts`                                 |
+| Deferred config, atomic editing and legacy migration  | [src/config.ts](src/config.ts)                       |
+| Tool definition and execution                         | `src/tools/tool-search/definition.ts`                |
+| Result shape (`createToolSearchResult`)               | `src/tools/tool-search/result.ts`                    |
+| Transcript rendering                                  | `src/tools/tool-search/presentation.ts`              |
+| Search and ranking                                    | `src/search.ts`                                      |
+| Configuration and migration tests                     | [test/tool-search.test.ts](test/tool-search.test.ts) |
+| Module exports                                        | `src/index.ts`                                       |
 
 ## Develop
 
-Source: https://github.com/luan/agents, directory
-harnesses/pi/agent/packages/pi-tool-search. Run `bun run typecheck` and
-`bun test test` in that directory.
+Use the maintained fork's root [Developer navigation](../../README.md#developer-navigation) for source, checks, installed-copy discovery, and runtime diagnosis.

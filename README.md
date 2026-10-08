@@ -67,7 +67,7 @@ Each new session reads the persisted policy and resets search-load exemptions. T
 
 ### Git-source upgrade smoke
 
-After the release branch is pushed with approval, reproduce the upgrade check in a real Pi environment:
+For a pushed release, reproduce the upgrade check in a real Pi environment only with current authorization for any user-configuration changes:
 
 1. Run `pi update --extensions`, then restart Pi. Confirm the startup banner contains exactly one `pi-tool-search` `tool-search` entry.
 2. Run `pi -p` with a `tool_search` availability probe. Confirm the tool is present.
@@ -75,7 +75,13 @@ After the release branch is pushed with approval, reproduce the upgrade check in
 4. In an interactive session, edit `tool-search.toml`; verify the current behavior is unchanged, run `/reload`, then confirm the new deferred list takes effect.
 5. Restore the user's original configuration and verify legacy migration preserved non-`[tools]` sections.
 
-Execution is pending push approval; do not run against user configuration before approval.
+Past smoke results or approvals do not authorize changes to user configuration in a new run.
+
+## Developer navigation
+
+- **Source and checks:** start with the package [Layout](packages/pi-tool-search/README.md#layout). Root [package.json](package.json) scripts, [.prettierrc.json](.prettierrc.json), and [eslint.config.mjs](eslint.config.mjs) are authoritative for development checks, formatting, and linting.
+- **Installation and core:** the development clone is not the installed copy. Run `pi list` first to discover the actual loaded package path, then inspect its configured package source. For core behavior, inspect the source matching the running Pi version; the root manifest's development host dependency is not evidence of that runtime version.
+- **Resume/fork diagnosis:** read the [runtime evidence entry](test/runtime-probes/resume-fork/README.md), then the [current restoration design](.agents/notes/restoration-repair-design.md#结论). Full automatic restoration is **BLOCKED**; diagnostic green is not a restoration fix.
 
 ## License
 
