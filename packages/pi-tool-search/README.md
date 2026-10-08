@@ -72,7 +72,7 @@ consumer.
 
 ## Persistent tool panel
 
-In a TUI session, run `/tools`. Managed tools are sorted by name. `[x] direct`
+In a TUI session, run `/tools`. All registered tools are sorted by name; only the assigned direct scope is editable. `[x] direct`
 means persistently exposed; `[ ] deferred` means hidden until loaded by
 `tool_search`, not disabled. Enter/Space opens a direct/deferred choice; Esc
 closes it. Selecting a policy saves immediately and updates the active set,
@@ -83,9 +83,20 @@ keeps that tool active. To unload it explicitly, select deferred again; it can
 then be searched or selected again. Direct restores its declaration immediately.
 
 Only tools assigned while active and direct at session start are editable.
-`tool_search` itself, native deferred/codemode exposures and scope-excluded tools
-are not listed or taken over. This first panel is not a global registered-tool
-catalog. Other active tools are preserved by a toggle.
+`tool_search` itself, host deferred/codemode (including native MCP), hidden/model-only
+exposures and scope-excluded tools are listed **readonly**, never taken over.
+Readonly rows show observed active/inactive state and host exposure when available,
+not the managed direct/deferred policy. Their description explains the boundary;
+Enter/Space performs no save or activation. Inactive alone is not evidence of
+being deferred, disabled or excluded by strict selection. When host metadata does
+not establish a more specific reason, the panel says only “Outside current assigned
+scope”. This registered-tool catalog never expands the assigned search index.
+Other active tools and configured outside/unregistered names are preserved by a toggle.
+
+Run the independent offline component demo from the repository root:
+`bun test/runtime-probes/tools-panel/discovery-demo.ts`. It uses a temporary policy
+and a mock host, but the real extension and SettingsList/SelectList components;
+it does not launch Pi or edit user configuration.
 
 The writer safely locates single/multiline string arrays through literal,
 quoted/escaped/dotted keys and inline tables, even with multiline strings elsewhere.
@@ -232,9 +243,10 @@ Tool Search only ranks inactive entries and asks that owner to add matches.
 
 ## Troubleshooting
 
-- **A tool is not in the picker:** it was inactive before Tool Search built its
-  scope, disabled by Pi's tool selection, or has not been registered yet. Tool
-  Search does not make it deferred.
+- **A registered tool is readonly in `/tools`:** it is outside the assigned direct
+  scope or has an incompatible host exposure. The host may not reveal whether
+  disabled/strict selection caused exclusion; do not infer that from inactive.
+  Tool Search does not make it deferred. Unregistered tools are not listed.
 - **A deferred tool is still active:** search-loaded tools stay active by design.
   Choose deferred again in `/tools` to unload it explicitly.
 - **A query returns no matches:** search is limited to inactive tools in the

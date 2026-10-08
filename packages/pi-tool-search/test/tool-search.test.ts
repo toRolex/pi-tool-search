@@ -15,6 +15,7 @@ import {
 } from "../src/config.ts";
 import {
 	initTheme,
+	getSettingsListTheme,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	type RegisteredCommand,
@@ -752,6 +753,23 @@ async function openTools(host: ReturnType<typeof extensionHarness>, mode = "tui"
 	return { panel: panel!, errors, text: () => Bun.stripANSI(panel!.render(100).join("\n")) };
 }
 
+function focusPanelTool(ui: Awaited<ReturnType<typeof openTools>>, name: string): void {
+	const cursor = Bun.stripANSI(getSettingsListTheme().cursor);
+	const visited = new Set<string>();
+	while (true) {
+		const selectedLine = ui
+			.text()
+			.split("\n")
+			.find((line) => line.startsWith(cursor));
+		if (!selectedLine) throw new Error("Panel has no visible selected row.");
+		const selectedName = selectedLine.slice(cursor.length).trimStart().split(/\s+/)[0];
+		if (selectedName === name) return;
+		if (visited.has(selectedName)) throw new Error(`Tool ${name} was not found in the panel.`);
+		visited.add(selectedName);
+		ui.panel.handleInput!("\x1b[B");
+	}
+}
+
 describe("#15 panel persistence", () => {
 	test("panel coexists with retryable legacy cleanup and never overwrites a newer handwritten policy", async () => {
 		const legacyPath = join(configDir, "xsettings.toml");
@@ -779,6 +797,7 @@ describe("#15 panel persistence", () => {
 		expect(readFileSync(configPath, "utf8")).toBe(source);
 		expect(parse(readFileSync(legacyPath, "utf8"))).toEqual({ other: { keep: 7 } });
 		const ui = await openTools(host);
+		focusPanelTool(ui, "weather");
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[A");
 		ui.panel.handleInput!("\r");
@@ -805,6 +824,7 @@ describe("#15 panel persistence", () => {
 			configPath,
 			prefix + "[\r\n  \"external\", # unregistered\r\n  'wind', # changed other tool\r\n]" + suffix,
 		);
+		focusPanelTool(ui, "weather");
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[B");
 		ui.panel.handleInput!("\r");
@@ -842,6 +862,7 @@ describe("#15 panel persistence", () => {
 		host.emit("session_start");
 		const ui = await openTools(host);
 		const chooseDeferred = () => {
+			focusPanelTool(ui, "weather");
 			ui.panel.handleInput!("\r");
 			ui.panel.handleInput!("\x1b[B");
 			ui.panel.handleInput!("\r");
@@ -882,6 +903,7 @@ describe("#15 panel persistence", () => {
 			);
 			host.emit("session_start");
 			const ui = await openTools(host);
+			focusPanelTool(ui, "weather");
 			ui.panel.handleInput!("\r");
 			ui.panel.handleInput!("\x1b[B");
 			ui.panel.handleInput!("\r");
@@ -918,6 +940,7 @@ describe("persistent /tools panel", () => {
 		expect(ui.text()).toContain("[ ] deferred");
 		expect(active).toEqual([TOOL_SEARCH_NAME, "weather"]);
 		const before = readFileSync(configPath, "utf8");
+		ui.panel.handleInput!("\x1b[B"); // pass readonly tool_search to weather
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\r"); // explicitly choose current deferred again
 		expect(active).toEqual([TOOL_SEARCH_NAME]);
@@ -937,6 +960,7 @@ describe("persistent /tools panel", () => {
 		fresh.emit("session_start");
 		expect(freshActive).toEqual([TOOL_SEARCH_NAME]);
 		const freshUi = await openTools(fresh);
+		freshUi.panel.handleInput!("\x1b[B"); // weather
 		freshUi.panel.handleInput!("\r");
 		freshUi.panel.handleInput!("\x1b[A"); // select direct
 		freshUi.panel.handleInput!("\r");
@@ -961,6 +985,7 @@ describe("persistent /tools panel", () => {
 		const bad = await openTools(host);
 		expect(bad.panel).toBeUndefined();
 		expect(bad.errors.join(" ")).toContain("Cannot open /tools");
+		ui.panel.handleInput!("\x1b[B"); // weather
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[B");
 		ui.panel.handleInput!("\r");
@@ -980,6 +1005,7 @@ describe("persistent /tools panel", () => {
 		host.emit("session_start");
 		const ui = await openTools(host);
 		writeFileSync(configPath, '[tools]\ndeferred = ["external", "wind"] # keep\n');
+		ui.panel.handleInput!("\x1b[B"); // weather
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[B");
 		ui.panel.handleInput!("\r");
@@ -1000,6 +1026,7 @@ describe("persistent /tools panel", () => {
 		);
 		host.emit("session_start");
 		const ui = await openTools(host);
+		ui.panel.handleInput!("\x1b[B"); // weather
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[B");
 		ui.panel.handleInput!("\r");
@@ -1027,6 +1054,7 @@ describe("persistent /tools panel", () => {
 		);
 		host.emit("session_start");
 		const ui = await openTools(host);
+		ui.panel.handleInput!("\x1b[B"); // weather
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[B");
 		ui.panel.handleInput!("\r");
@@ -1057,7 +1085,7 @@ describe("persistent /tools panel", () => {
 		const ui = await openTools(host);
 		expect(ui.text().indexOf("alpha")).toBeLessThan(ui.text().indexOf("zebra"));
 		for (const name of [TOOL_SEARCH_NAME, "outside", "native", "code", "hidden", "model"])
-			expect(ui.text()).not.toContain(name);
+			expect(ui.text()).toMatch(new RegExp(`${name}\\s+.*readonly`));
 		active.push("outside");
 		host.emit("before_agent_start", { systemPromptOptions: { sections: {} } });
 		expect(active).toContain(TOOL_SEARCH_NAME);
@@ -1078,6 +1106,7 @@ describe("persistent /tools panel", () => {
 		host.emit("session_start");
 		const ui = await openTools(host);
 		expect(ui.text()).toContain("[x] direct");
+		ui.panel.handleInput!("\x1b[B"); // weather
 		ui.panel.handleInput!("\r"); // choose weather policy
 		ui.panel.handleInput!("[B"); // deferred
 		ui.panel.handleInput!("\r");
@@ -1087,6 +1116,105 @@ describe("persistent /tools panel", () => {
 		expect(ui.text()).toContain("[ ] deferred");
 		const result = await host.tool.execute("load", { query: "select:weather" }, undefined, undefined, {} as never);
 		expect(result.details.activation.added).toEqual(["weather"]);
+	});
+});
+
+describe("/tools registered discovery and readonly boundaries (#16)", () => {
+	test("readonly reasons use host exposure, never guess disabled or strict selection from inactive", async () => {
+		configure(["native", "code", "outside", "missing", TOOL_SEARCH_NAME]);
+		const active = [TOOL_SEARCH_NAME, "alpha", "native", "code", "hidden", "model"];
+		const tools = [
+			metadata("alpha", "editable"),
+			{ ...metadata("code", "code"), exposure: "codemode" },
+			{ ...metadata("hidden", "hidden"), exposure: "hidden" },
+			{ ...metadata("model", "model"), exposure: "model-only" },
+			{ ...metadata("native", "native"), exposure: "deferred" },
+			metadata("outside", "not selected"),
+			metadata(TOOL_SEARCH_NAME, "search"),
+		];
+		const host = extensionHarness(active, tools, {
+			read: deferredConfigFileSystem.read,
+			write() {
+				throw new Error("readonly actions must never write");
+			},
+		});
+		host.emit("session_start");
+		const updatesBeforeInput = [...host.updates];
+		const ui = await openTools(host);
+		const before = readFileSync(configPath, "utf8");
+		ui.panel.handleInput!("\x1b[B"); // code
+		expect(ui.text()).toContain("Host exposure: codemode");
+		expect(ui.text()).toMatch(/code\s+host codemode · active \(readonly\)/);
+		expect(ui.text()).toMatch(/native\s+host deferred · active \(readonly\)/);
+		for (const reason of [
+			"Host exposure: codemode",
+			"Host exposure: hidden",
+			"Host exposure: model-only",
+			"Host exposure: deferred",
+		]) {
+			expect(ui.text()).toContain(reason);
+			for (const key of ["\r", " "]) ui.panel.handleInput!(key);
+			ui.panel.handleInput!("\x1b[B");
+		}
+		expect(ui.text()).toContain("Outside current assigned scope.");
+		expect(ui.text()).not.toMatch(/disabled|strict selection|MCP/);
+		expect(ui.text()).toMatch(/outside\s+inactive \(readonly\)/);
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B"); // self
+		expect(ui.text()).toContain("Tool Search stays available");
+		ui.panel.handleInput!(" ");
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "alpha", "native", "code", "hidden", "model"]);
+		expect(host.updates).toEqual(updatesBeforeInput);
+		const sections: Record<string, string> = {};
+		host.emit("before_agent_start", { systemPromptOptions: { sections } });
+		expect(sections[DEFERRED_SECTION_KEY]).toBeUndefined();
+		for (const query of ["select:native,code,outside", "native code outside"]) {
+			const result = await host.tool.execute("load", { query }, undefined, undefined, {} as never);
+			expect(result.details.activation.added).toEqual([]);
+			expect(result.details.counts.registered).toBe(1);
+		}
+		expect(ui.errors).toEqual([]);
+	});
+	test("all registered tools are sorted; readonly input leaves disk and active unchanged", async () => {
+		configure(["unknown", "outside"]);
+		const active = [TOOL_SEARCH_NAME, "zebra", "alpha"];
+		const host = extensionHarness(active, [
+			metadata("zebra", "zebra"),
+			metadata(TOOL_SEARCH_NAME, "search"),
+			metadata("outside", "outside"),
+			metadata("alpha", "alpha"),
+		]);
+		host.emit("session_start");
+		const ui = await openTools(host);
+		const text = ui.text();
+		expect(text.indexOf("alpha")).toBeLessThan(text.indexOf("outside"));
+		expect(text.indexOf("outside")).toBeLessThan(text.indexOf(TOOL_SEARCH_NAME));
+		expect(text.indexOf(TOOL_SEARCH_NAME)).toBeLessThan(text.indexOf("zebra"));
+		expect(text).toMatch(/outside\s+.*inactive.*readonly/);
+		expect(text).not.toMatch(/outside\s+\[ \] deferred/);
+		const before = readFileSync(configPath, "utf8");
+		ui.panel.handleInput!("\x1b[B"); // outside
+		expect(ui.text()).toContain("Outside current assigned scope");
+		for (const key of ["\r", " ", "\r"]) ui.panel.handleInput!(key);
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "zebra", "alpha"]);
+		ui.panel.handleInput!("\x1b[B"); // tool_search
+		for (const key of ["\r", " "]) ui.panel.handleInput!(key);
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(active).toContain(TOOL_SEARCH_NAME);
+		ui.panel.handleInput!("\x1b[B"); // zebra, editable
+		ui.panel.handleInput!("\r");
+		ui.panel.handleInput!("\x1b[B");
+		ui.panel.handleInput!("\r");
+		expect(readDeferredTools(configPath)).toEqual(["unknown", "outside", "zebra"]);
+		expect(active).toEqual([TOOL_SEARCH_NAME, "alpha"]);
+		expect(ui.text()).toMatch(/outside\s+.*inactive.*readonly/);
+		const loaded = await host.tool.execute("load", { query: "select:zebra" }, undefined, undefined, {} as never);
+		expect(loaded.details.activation.added).toEqual(["zebra"]);
+		const rejected = await host.tool.execute("load", { query: "select:outside" }, undefined, undefined, {} as never);
+		expect(rejected.details.status).toBe("invalid_select");
+		expect(ui.errors).toEqual([]);
 	});
 });
 
