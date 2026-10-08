@@ -18,6 +18,7 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string, 
 		deferredSet = new Set(names);
 	};
 	let directTools: ReturnType<ExtensionAPI["getAllTools"]> = [];
+	let scopeAssigned = false;
 	const activatedBySearch = new Set<string>();
 	const directScope = {
 		tools: () => directTools,
@@ -77,18 +78,29 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string, 
 			return names;
 		},
 	});
-	pi.on("session_start", () => {
+	pi.on("session_start", (_event, ctx) => {
+		try {
+			updatePolicy(readDeferredTools(configPath));
+		} catch (error) {
+			ctx.ui.notify(`Cannot initialize Tool Search: ${String(error)}`, "error");
+			return;
+		}
 		const activeTools = pi.getActiveTools();
 		const active = new Set(activeTools);
 		activatedBySearch.clear();
-		directTools = pi
-			.getAllTools()
-			.filter(
-				(candidate: { name: string; exposure?: unknown }) =>
-					candidate.name !== tool.name &&
-					active.has(candidate.name) &&
-					(candidate.exposure === undefined || candidate.exposure === "direct"),
-			);
+		// Assignment belongs to this extension instance, not the already-pruned
+		// loadout. Even an empty initial scope must not be recaptured later.
+		if (!scopeAssigned) {
+			directTools = pi
+				.getAllTools()
+				.filter(
+					(candidate: { name: string; exposure?: unknown }) =>
+						candidate.name !== tool.name &&
+						active.has(candidate.name) &&
+						(candidate.exposure === undefined || candidate.exposure === "direct"),
+				);
+			scopeAssigned = true;
+		}
 		const assigned = new Set(directTools.map((candidate) => candidate.name));
 		pi.setActiveTools(activeTools.filter((name) => !assigned.has(name) || !deferredSet.has(name)));
 	});

@@ -24,23 +24,25 @@ dynamic tool APIs (`getAllTools`, `getActiveTools`, `setActiveTools`).
 ## Scope
 
 `@luan.sh/pi-tool-search` always runs as a direct Pi tool. Its assigned scope
-is the other tools that were active in Pi at session start. Loading a match
-calls `pi.setActiveTools()` in that scope.
+is the other eligible direct tools active before its first session-start pruning.
+That assignment lasts for the extension instance. Loading a match calls
+`pi.setActiveTools()` in that scope.
 
 ## Deferred scope
 
-All tools remain registered with Pi, but configured deferred tools start inactive. At
-session start, the package builds the deferred-tool picker from its assigned
-scope. It does not use every tool returned by `pi.getAllTools()` as a global
-search index.
+All tools remain registered with Pi, but managed configured deferred tools start
+inactive. The search index uses only the initially assigned direct scope, not
+all tools returned by `pi.getAllTools()`.
 
-The assigned scope is the boundary for both the picker and the search:
+The assigned scope is the boundary for search and editable panel policies:
 
-- The direct scope contains only the active direct tools that Tool Search was
-  assigned.
-- Registered tools outside that scope are invisible to `tool_search`.
-- Disabled tools, tools omitted by a strict `--tools` selection, and tools
-  outside the current scope are not deferred and do not appear in the picker.
+- The direct scope contains only the eligible active direct tools Tool Search was
+  initially assigned, including tools subsequently made deferred/inactive.
+- Registered tools outside that scope are invisible to `tool_search`, but appear
+  as readonly rows in `/tools`.
+- Disabled tools and tools omitted by a strict `--tools` selection are not managed
+  deferred tools. Registered scope-excluded names can be displayed readonly, but
+  the panel does not override their owner or infer exclusion provenance.
 
 Configured deferred names are removed from the active set before the first model request.
 `tool_search` itself stays active so the model can load a capability later.
@@ -61,8 +63,10 @@ deferred = ["exec_command", "web__run"]
 
 `tools.deferred` is an array of tool-name strings. A missing file or key means
 an empty deferred list. Invalid TOML is reported as an error. Configuration
-is read when the extension initializes; manual edits apply after `/reload` or
-opening `/tools` to refresh policy (opening alone does not unload search-loaded tools).
+is read when the extension or a session initializes; manual edits apply after
+`/reload`, the next session initialization or opening `/tools` to refresh policy.
+There is no file watcher or per-turn disk read. Opening alone does not unload
+search-loaded tools; a read error reports an error and retains the last valid state.
 An existing new-format file takes precedence. On first initialization, an
 existing legacy `[tools]` section in `xsettings.toml` is migrated once, then
 removed from that file; all other sections are preserved. `/xsettings` is no
@@ -81,8 +85,20 @@ without `/reload` or session entries. New instances inherit the saved file.
 A deferred tool remains unchecked even when search has loaded it. Reopening
 keeps that tool active. To unload it explicitly, select deferred again; it can
 then be searched or selected again. Direct restores its declaration immediately.
+Search → direct → deferred also clears the earlier search-load exemption.
+Every turn reasserts the latest successfully read/saved policy within the assigned
+scope, resisting unrelated extensions reactivating unloaded deferred tools while
+preserving all other active state. Deferred hints track that policy and the active
+set, advertising only assigned, currently unloaded tools.
 
-Only tools assigned while active and direct at session start are editable.
+A new session rereads policy and resets search-load exemptions, but retains the
+scope captured before this extension's first pruning. Already-clipped active sets
+cannot shrink it, and newly active outsiders cannot expand it. Inactive direct
+names are not automatically restored. This plugin-level reset also handles
+session-start events for resume/fork, but does **not** repair the existing blocked
+host/branch automatic restoration flow.
+
+Only tools assigned while active and direct at the instance's first session start are editable.
 `tool_search` itself, host deferred/codemode (including native MCP), hidden/model-only
 exposures and scope-excluded tools are listed **readonly**, never taken over.
 Readonly rows show observed active/inactive state and host exposure when available,
