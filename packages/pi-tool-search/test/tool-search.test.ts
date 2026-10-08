@@ -15,6 +15,7 @@ import {
 } from "../src/config.ts";
 import {
 	initTheme,
+	getSettingsListTheme,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	type RegisteredCommand,
@@ -752,6 +753,23 @@ async function openTools(host: ReturnType<typeof extensionHarness>, mode = "tui"
 	return { panel: panel!, errors, text: () => Bun.stripANSI(panel!.render(100).join("\n")) };
 }
 
+function focusPanelTool(ui: Awaited<ReturnType<typeof openTools>>, name: string): void {
+	const cursor = Bun.stripANSI(getSettingsListTheme().cursor);
+	const visited = new Set<string>();
+	while (true) {
+		const selectedLine = ui
+			.text()
+			.split("\n")
+			.find((line) => line.startsWith(cursor));
+		if (!selectedLine) throw new Error("Panel has no visible selected row.");
+		const selectedName = selectedLine.slice(cursor.length).trimStart().split(/\s+/)[0];
+		if (selectedName === name) return;
+		if (visited.has(selectedName)) throw new Error(`Tool ${name} was not found in the panel.`);
+		visited.add(selectedName);
+		ui.panel.handleInput!("\x1b[B");
+	}
+}
+
 describe("#15 panel persistence", () => {
 	test("panel coexists with retryable legacy cleanup and never overwrites a newer handwritten policy", async () => {
 		const legacyPath = join(configDir, "xsettings.toml");
@@ -779,6 +797,7 @@ describe("#15 panel persistence", () => {
 		expect(readFileSync(configPath, "utf8")).toBe(source);
 		expect(parse(readFileSync(legacyPath, "utf8"))).toEqual({ other: { keep: 7 } });
 		const ui = await openTools(host);
+		focusPanelTool(ui, "weather");
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[A");
 		ui.panel.handleInput!("\r");
@@ -805,6 +824,7 @@ describe("#15 panel persistence", () => {
 			configPath,
 			prefix + "[\r\n  \"external\", # unregistered\r\n  'wind', # changed other tool\r\n]" + suffix,
 		);
+		focusPanelTool(ui, "weather");
 		ui.panel.handleInput!("\r");
 		ui.panel.handleInput!("\x1b[B");
 		ui.panel.handleInput!("\r");
@@ -842,6 +862,7 @@ describe("#15 panel persistence", () => {
 		host.emit("session_start");
 		const ui = await openTools(host);
 		const chooseDeferred = () => {
+			focusPanelTool(ui, "weather");
 			ui.panel.handleInput!("\r");
 			ui.panel.handleInput!("\x1b[B");
 			ui.panel.handleInput!("\r");
@@ -882,6 +903,7 @@ describe("#15 panel persistence", () => {
 			);
 			host.emit("session_start");
 			const ui = await openTools(host);
+			focusPanelTool(ui, "weather");
 			ui.panel.handleInput!("\r");
 			ui.panel.handleInput!("\x1b[B");
 			ui.panel.handleInput!("\r");

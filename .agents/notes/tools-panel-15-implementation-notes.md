@@ -44,6 +44,15 @@
 - 若配置 tools 为 scalar/array、deferred 非字符串数组/含空名字、非法 TOML 或无法唯一可靠定位，则明确拒绝，不借清洗破坏原内容。
 - 未执行真实用户 Pi 交互或升级 smoke；测试使用隔离 tmpdir + 真正 TUI组件键盘输入。#16/#17和 resume/fork BLOCKED 不在本票。
 
+## #16 合并后的测试适配
+
+- 协调者要求：自己 workspace 执行 `jj new @ feature/tools-panel`，合入 integration nullzqmy / 454f5f72，形成自己的 merge change nvqlqxqkxnwnsrlquptsrklqpzrvnmll；不改生产语义、不减少断言。
+- 实际 RED：`bun test packages/pi-tool-search/test/tool-search.test.ts -t '#15 panel persistence'`，**0 pass / 4 fail / 12 assertions**；legacy 未移除 weather、复杂外部文件未加入 weather、未触发 conflict、缺键未创建，与协调者四个失败一致。
+- 原因：#16 全注册目录现在包含只读 `tool_search`，这些 fixture 的初始选中行不再是 weather。不能用多按一次方向键解决，排序或目录增长会再次破坏测试。
+- 修复只在测试：focusPanelTool 读取公开 render 的 cursor/所选工具名，通过真实组件 Down 键寻找目标；检测遍历循环/无选中行并报错。四处操作前明确定位 weather，包括冲突后的重试。没有访问组件内部数据或直接调用 policy。
+- 实际 GREEN：同命令 **4 pass / 0 fail / 57 assertions**，原断言全部保留。`bun run check` 全链通过：tool-search **93 pass / 396 assertions**，xsettings **112 pass / 411 assertions**，合计 **205测试 / 807 assertions**。
+- 相对本轮 integration，仅 test/tool-search.test.ts 与本 notes 有变更；不改生产、README、依赖、manifest/lock；未操作其他 workspace @、GitHub或用户配置。
+
 ## Deviations
 
 - Context7 不可用，以上为本地锁定官方发布物证据，不宣称官方文档查询成功。
