@@ -62,14 +62,16 @@ export async function executeToolSearch(
 	const activeTools = [...scope.active()];
 	const activeNames = new Set(activeTools);
 	const allTools = [...scope.tools()];
-	const searchableTools = allTools.filter((tool) => !activeNames.has(tool.name));
+	const deferredNames = getDeferredNames ? new Set(getDeferredNames()) : undefined;
+	const searchableTools = allTools.filter(
+		(tool) => !activeNames.has(tool.name) && (!deferredNames || deferredNames.has(tool.name)),
+	);
 	const limit = Math.min(MAX_RESULTS, Math.max(1, Math.floor(parameters.limit ?? MAX_RESULTS) || MAX_RESULTS));
 
 	const select = parseSelectQuery(parameters.query);
 	if (select) {
-		const deferredNames = new Set(getDeferredNames?.() ?? []);
 		const allToolNames = new Set(allTools.map((tool) => tool.name));
-		const unknown = select.requested.filter((name) => !allToolNames.has(name) || !deferredNames.has(name));
+		const unknown = select.requested.filter((name) => !allToolNames.has(name) || !deferredNames?.has(name));
 		const alreadyActive = select.requested.filter((name) => !unknown.includes(name) && activeNames.has(name));
 		const toActivate = select.requested.filter((name) => !unknown.includes(name) && !activeNames.has(name));
 		const added = unknown.length > 0 ? [] : toActivate;

@@ -49,7 +49,17 @@ List deferred tool names in `~/.pi/agent/tool-search.toml`:
 deferred = ["web_search", "herdr_spawn_agent"]
 ```
 
-Tool Search reads this file once when it initializes; edits affect the running instance only after `/reload`. A missing file means an empty deferred list. Invalid TOML is reported as an error. On first initialization, an existing `[tools]` section in `xsettings.toml` is migrated once: the legacy deferred list is written to the new file and the old `[tools]` section removed; other sections are preserved. The new file takes precedence if already present. `pi.defaultTools` is not migrated (deprecated; no consumer). `/xsettings` is no longer provided by this fork. The status indicator falls back to Pi's native spinner.
+Tool Search reads this file at initialization. A missing file means an empty deferred list. Invalid TOML is reported as an error. On first initialization, an existing `[tools]` section in `xsettings.toml` is migrated once: the legacy deferred list is written to the new file and the old `[tools]` section removed; other sections are preserved. The new file takes precedence if already present. `pi.defaultTools` is not migrated (deprecated; no consumer). `/xsettings` is no longer provided by this fork. The status indicator falls back to Pi's native spinner.
+
+### Persistent `/tools` panel
+
+In interactive TUI mode, `/tools` lists this extension's assigned direct tools, sorted by name. `[x] direct` means the schema stays exposed; `[ ] deferred` means `tool_search` can load it on demand, **not disabled**. Enter/Space opens an explicit direct/deferred choice. Each selection atomically saves `tool-search.toml` and updates current active declarations without `/reload`; new instances inherit the saved policy.
+
+A search-loaded tool still displays deferred. Reopening the panel does not unload it; choosing deferred again explicitly unloads it so search can load it again later. `tool_search` itself, native deferred/codemode tools and tools outside the assigned scope cannot be edited. The panel does not enable tools excluded by Pi's selection.
+
+The minimal editor currently supports a single-line `deferred` string array under literal `[tools]`, or creates a missing file. It preserves bytes outside that array and keeps unregistered names. Other legal TOML layouts (including missing keys, quoted/dotted/inline forms and multiline strings/arrays) are explicitly rejected rather than rewritten. Parse/write failures report an error and preserve file, policy, active tools and displayed selection.
+
+Opening the panel refreshes the persisted policy; every selection rereads disk before changing one name. Manual edits otherwise require `/reload` (no file watcher). Non-TUI modes receive an explicit error. Do not install Pi's official example `tools.ts` alongside this extension: its same-named `/tools` command controls session-only enable/disable, whereas this command persists direct/deferred policy globally.
 
 ### Git-source upgrade smoke
 
