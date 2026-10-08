@@ -1,5 +1,7 @@
 # AGENTS.md
 
+开发或排障：先读 [README 的 Developer navigation](README.md#developer-navigation)，定位源码、安装副本与运行时证据。
+
 ## Agent skills
 
 ### Issue tracker

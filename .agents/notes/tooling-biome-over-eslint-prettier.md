@@ -1,13 +1,10 @@
-# Tooling: biome over eslint+prettier
+# Tooling 选型与协调记录
 
-- 2026-10-05：triage 来源不明的工作副本改动时确认，14:32–14:43 窗口内先后出现过两套格式化方案。
-- 磁盘遗留 `eslint.config.mjs`（typescript-eslint recommendedTypeChecked + eslint-config-prettier）与 root node_modules 里的 prettier，属于被放弃的 ESLint 尝试。
-- 最终选型 biome 2.5.10：`biome.json`（tab/120/linter recommended）+ 根 `package.json` scripts（format/check:format/lint/typecheck/test/check）。
-- scripts 与 biome.json 覆盖 `packages/pi-*/{src,test}/**/*.ts`，与 eslint 配置目标重叠，二者取一；保留 biome，删除 eslint.config.mjs（原内容可在 ylkwuspy 的 evolog 历史中找回）。
+## 当前裁决（2026-10-05 15:3x，用户拍板）
 
-## 最终裁决（2026-10-05 15:3x，用户拍板，覆盖上文结论）
+当前权威为根 [package.json](../../package.json) scripts、[.prettierrc.json](../../.prettierrc.json) 与 [eslint.config.mjs](../../eslint.config.mjs)。以下版本与计数是当时的落地快照。
 
-上文"最终选型 biome"**作废**。14:32–14:43 的"来源不明改动"实为另一个 pi session（w64:p3，retro tab）在执行用户刚拍板的方案 A；本 session（w64:p1J，warning tab）按 handoff 文档 triage 时误判为无主改动并恢复 biome。两个 session 已通过 herdr 点对点协调，本 session 已停止 tooling 改动并退出仓库工作。
+旧的"最终选型 biome"**作废**。14:32–14:43 的"来源不明改动"实为另一个 pi session（w64:p3，retro tab）在执行用户刚拍板的方案 A；本 session（w64:p1J，warning tab）按 handoff 文档 triage 时误判为无主改动并恢复 biome。两个 session 已通过 herdr 点对点协调，本 session 已停止 tooling 改动并退出仓库工作。
 
 **用户决策：formatter = Prettier，lint = ESLint flat + typescript-eslint（type-aware）**，落地状态：
 
@@ -16,3 +13,14 @@
 - 保留的 type-aware 规则抓到并修复：`no-unnecessary-type-assertion` ×23（`--fix`）；`await-thenable` ×1（`@types/bun` 的 `expect().rejects` 类型伪影，行内禁用注明）。
 - 上游对照：luan/agents 用 Biome 2.5.10；用户在知情下选择 Prettier+ESLint（偏好优先）。
 - 遗留：`pi-lens` ast-grep 规则 `no-unknown-laundering` 对 `settings.ts:128` 的 `type UntrustedRegistryValue = unknown` 误报——那是带注释的信任边界（Symbol.for 跨 realm 数据先 unknown 再 isRegistry 验证），有意为之。
+
+## 历史：已作废的 Biome 判断
+
+以下保留原判断的因果记录，不是当前操作指令：
+
+- 2026-10-05：triage 来源不明的工作副本改动时确认，14:32–14:43 窗口内先后出现过两套格式化方案。
+- 磁盘遗留 `eslint.config.mjs`（typescript-eslint recommendedTypeChecked + eslint-config-prettier）与 root node_modules 里的 prettier，属于被放弃的 ESLint 尝试。
+- 最终选型 biome 2.5.10：`biome.json`（tab/120/linter recommended）+ 根 `package.json` scripts（format/check:format/lint/typecheck/test/check）。
+- scripts 与 biome.json 覆盖 `packages/pi-*/{src,test}/**/*.ts`，与 eslint 配置目标重叠，二者取一；保留 biome，删除 eslint.config.mjs（原内容可在 ylkwuspy 的 evolog 历史中找回）。
+
+后续交接应标明 repo root、基准 revision、采样时间、活动 owner/pane、保留路径和权威来源。动态状态是快照；继续前重新核验 owner，来源未确认不等于可以删除。

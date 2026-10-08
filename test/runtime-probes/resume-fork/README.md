@@ -30,7 +30,9 @@ builtin 真实 SDK factory 路径的恢复失败，不是仓库扩展造成。�
 
 真实 CLI fresh 的两个 prompt 产生 select toolCall、真实 toolResult 和 system delta。`--fork` 与 `--session` 两个独立 CLI 进程都失去 loaded tool。CLI fork 是启动时复制，SDK fork 是真实 runtime replacement，二者分别取证。CLI 的 session_start reason 由 CLI 自己产生，不伪造为 runtime fork reason。
 
-## 来源与最小建议
+## 来源与历史最小建议
+
+下列旧修法建议已被后续 [restoration-repair-design](../../../.agents/notes/restoration-repair-design.md#结论) 取代，不是已批准修法。当前完整自动恢复为 **BLOCKED**：需要 core 提供工具选择来源与有效恢复策略，不实施 preserve-only 子修。跟踪入口：[issue #10](https://github.com/toRolex/pi-tool-search/issues/10)。本探针的 diagnosis green 只确认机制，不表示恢复已修复。
 
 `evidence/source-locations.log` 保存实读 installed source 的行号与片段。
 
