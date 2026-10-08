@@ -53,9 +53,11 @@ Tool Search reads this file at initialization. A missing file means an empty def
 
 ### Persistent `/tools` panel
 
-In interactive TUI mode, `/tools` lists this extension's assigned direct tools, sorted by name. `[x] direct` means the schema stays exposed; `[ ] deferred` means `tool_search` can load it on demand, **not disabled**. Enter/Space opens an explicit direct/deferred choice. Each selection atomically saves `tool-search.toml` and updates current active declarations without `/reload`; new instances inherit the saved policy.
+In interactive TUI mode, `/tools` lists **all registered tools**, sorted by name; only this extension's assigned direct scope is editable. `[x] direct` means the schema stays exposed; `[ ] deferred` means `tool_search` can load it on demand, **not disabled**. Enter/Space opens an explicit direct/deferred choice. Each selection atomically saves `tool-search.toml` and updates current active declarations without `/reload`; new instances inherit the saved policy.
 
-A search-loaded tool still displays deferred. Reopening the panel does not unload it; choosing deferred again explicitly unloads it so search can load it again later. `tool_search` itself, native deferred/codemode tools and tools outside the assigned scope cannot be edited. The panel does not enable tools excluded by Pi's selection.
+A search-loaded managed tool still displays deferred. Reopening the panel does not unload it; choosing deferred again explicitly unloads it so search can load it again later. `tool_search` itself, host deferred/codemode (including native MCP), hidden/model-only exposures and tools outside the assigned scope are readonly. These rows show observed active/inactive state and host exposure when available, **not this extension's deferred policy**. Selecting a readonly row shows a reason but Enter/Space cannot change it. Reasons use only host-observable metadata; without clear evidence they report only “Outside current assigned scope”, not guessed disabled/strict-selection provenance. The discovery catalog never enlarges the search index or enables excluded tools. Configured scope-excluded and unregistered names remain preserved.
+
+Offline component demo (temporary policy, no user Pi configuration): `bun test/runtime-probes/tools-panel/discovery-demo.ts`.
 
 The minimal editor currently supports a single-line `deferred` string array under literal `[tools]`, or creates a missing file. It preserves bytes outside that array and keeps unregistered names. Other legal TOML layouts (including missing keys, quoted/dotted/inline forms and multiline strings/arrays) are explicitly rejected rather than rewritten. Parse/write failures report an error and preserve file, policy, active tools and displayed selection.
 

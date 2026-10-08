@@ -40,7 +40,27 @@ export function createToolSearchExtension(pi: ExtensionAPI, configPath: string, 
 	const tool = createToolSearchTool(directScope, getDeferredNames);
 	pi.registerTool(tool);
 	registerToolsPanel(pi, {
-		tools: () => directTools,
+		tools: () => {
+			const assigned = new Set(directTools.map((candidate) => candidate.name));
+			const active = new Set(pi.getActiveTools());
+			return pi.getAllTools().map((candidate: { name: string; exposure?: unknown }) => {
+				const exposure = typeof candidate.exposure === "string" ? candidate.exposure : undefined;
+				let readOnlyReason: string | undefined;
+				if (candidate.name === tool.name) {
+					readOnlyReason = "Tool Search stays available; its own policy cannot be changed.";
+				} else if (!assigned.has(candidate.name)) {
+					readOnlyReason =
+						exposure && exposure !== "direct"
+							? `Host exposure: ${exposure}; outside current assigned scope.`
+							: "Outside current assigned scope.";
+				}
+				return {
+					name: candidate.name,
+					observedState: `${exposure ? `host ${exposure} · ` : ""}${active.has(candidate.name) ? "active" : "inactive"}`,
+					readOnlyReason,
+				};
+			});
+		},
 		refresh: () => {
 			updatePolicy(readDeferredTools(configPath));
 			return deferredTools;
